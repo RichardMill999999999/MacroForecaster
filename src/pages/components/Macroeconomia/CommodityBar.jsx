@@ -70,6 +70,14 @@ import wheatIcon from "../../../variable/assets/fotos/Wheat-icon.webp";
 import ArticleAIAnalysis from "./ArticleAIAnalysis";
 
 const BACKEND_URL = "http://localhost:5000";
+const HISTORY_RANGES = [
+  ["1w", "1 week"],
+  ["30d", "30 days"],
+  ["90d", "90 days"],
+  ["180d", "180 days"],
+  ["365d", "365 days"],
+  ["max", "Max available"],
+];
 const COMMODITIES = [
   { name: "Gold", icon: goldIcon, symbol: "OANDA:XAU_USD", forecastTicker: "GLD", distribution: "gold" },
   { name: "Silver", icon: silverIcon, symbol: "OANDA:XAG_USD", forecastTicker: "SLV", distribution: "silver" },
@@ -115,6 +123,7 @@ export default function CommoditiesBar({ onChatContextChange }) {
   const [dailyChanges, setDailyChanges] = useState({});
   const [priceError, setPriceError] = useState("");
   const [selectedCommodity, setSelectedCommodity] = useState(null);
+  const [historyRange, setHistoryRange] = useState("365d");
   const [details, setDetails] = useState({ loading: false, series: [], news: [], errors: [] });
   const [distribution, setDistribution] = useState({ loading: false, data: null, error: "" });
   const activeSymbol = useRef(null);
@@ -165,11 +174,25 @@ export default function CommoditiesBar({ onChatContextChange }) {
       try {
         const response = await axios.get(`${BACKEND_URL}/resourcePrices`, { timeout: 10000 });
         if (!active) return;
-        setPrices(response.data.prices || {});
-        setDailyChanges(response.data.changes || {});
-        setPriceError("");
+        if (!response.data || typeof response.data !== "object" || Array.isArray(response.data)) {
+          throw new Error("The commodity price service returned an empty response.");
+        }
+        const nextPrices = response.data.prices;
+        const nextChanges = response.data.changes;
+        if (!nextPrices || typeof nextPrices !== "object" || Array.isArray(nextPrices)) {
+          throw new Error(response.data.error || "The commodity price service returned no price data.");
+        }
+        setPrices(nextPrices);
+        setDailyChanges(nextChanges && typeof nextChanges === "object" ? nextChanges : {});
+        setPriceError(response.data.available === false
+          ? response.data.error || "Live commodity quotes are unavailable."
+          : "");
       } catch (err) {
-        if (active) setPriceError(errorMessage(err, "Live commodity prices are unavailable."));
+        if (active) {
+          setPrices({});
+          setDailyChanges({});
+          setPriceError(errorMessage(err, "Live commodity prices are unavailable."));
+        }
       }
     };
 
@@ -181,17 +204,26 @@ export default function CommoditiesBar({ onChatContextChange }) {
     };
   }, []);
 
-  const showCommodityDetails = (commodity) => {
+  const showCommodityDetails = (commodity, range = historyRange) => {
     activeSymbol.current = commodity.symbol;
     setSelectedCommodity(commodity);
     setDetails({ loading: true, series: [], news: [], errors: [] });
     setDistribution({ loading: false, data: null, error: "" });
-    const series = getCachedRequest(SERIES_CACHE, SERIES_REQUESTS, commodity.symbol, async () => {
+    const seriesKey = `${commodity.symbol}:${range}`;
+    const series = getCachedRequest(SERIES_CACHE, SERIES_REQUESTS, seriesKey, async () => {
       const response = await axios.get(
-        `${BACKEND_URL}/resourceSeries/${encodeURIComponent(commodity.symbol)}`,
+        `${BACKEND_URL}/resourceSeries/${encodeURIComponent(commodity.symbol)}?range=${encodeURIComponent(range)}`,
         { timeout: 30000 }
       );
-      return response.data;
+      const prices = Array.isArray(response.data) ? response.data : response.data?.prices;
+      if (!Array.isArray(prices)) {
+        throw new Error(response.data?.error || "Commodity price history returned no price series.");
+      }
+      return prices.filter((item) => (
+        item
+        && typeof item.date === "string"
+        && Number.isFinite(Number(item.value))
+      ));
     });
     const news = getCachedRequest(NEWS_CACHE, NEWS_REQUESTS, commodity.name, async () => {
       const response = await axios.get(`${BACKEND_URL}/news/commodity`, {
@@ -286,6 +318,23 @@ export default function CommoditiesBar({ onChatContextChange }) {
 
           {details.loading && <p className="macro-commodity-status">Loading price history and related news…</p>}
           {details.errors.map((error) => <p className="macro-commodity-error" key={error}>{error}</p>)}
+          <div className="macro-commodity-range-picker" role="group" aria-label="Commodity chart range">
+            <span>Chart range</span>
+            {HISTORY_RANGES.map(([range, label]) => (
+              <button
+                key={range}
+                type="button"
+                className={historyRange === range ? "active" : ""}
+                aria-pressed={historyRange === range}
+                onClick={() => {
+                  setHistoryRange(range);
+                  showCommodityDetails(selectedCommodity, range);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           {details.series.length > 0 && (
             <div className="macro-commodity-chart">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
@@ -298,6 +347,9 @@ export default function CommoditiesBar({ onChatContextChange }) {
                 </LineChart>
               </ResponsiveContainer>
             </div>
+          )}
+          {!details.loading && details.series.length === 0 && !details.errors.length && (
+            <p className="macro-commodity-status">No price history was returned for this range.</p>
           )}
 
           <div className="macro-commodity-forecast-link">

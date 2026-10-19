@@ -111,14 +111,14 @@ def _run_websocket(api_key):
 def latestPricesFinnhub():
     global _worker_started
 
-    api_key = os.getenv("FINNHUB_API_KEY")
-    if not api_key:
-        log.warning("Finnhub streaming is unavailable because FINNHUB_API_KEY is not configured")
-        return
-    with _worker_lock:
-        if not _worker_started:
-            _worker_started = True
-            threading.Thread(target=_run_websocket, args=(api_key,), daemon=True).start()
+    api_key = os.getenv("FINNHUB_API_KEY", "").strip()
+    if api_key:
+        with _worker_lock:
+            if not _worker_started:
+                _worker_started = True
+                threading.Thread(target=_run_websocket, args=(api_key,), daemon=True).start()
+    else:
+        log.info("Finnhub streaming is not configured; using delayed daily commodity quotes.")
 
     with _price_lock:
         live_prices = {
@@ -138,6 +138,8 @@ def latestPricesFinnhub():
     return {
         "prices": live_prices,
         "changes": changes,
+        "source": "Finnhub stream with delayed Yahoo Finance fallback" if api_key else "Yahoo Finance delayed quotes",
+        "available": bool(live_prices),
     }
 
 
@@ -177,13 +179,23 @@ def _daily_market_data(symbol):
 
 
 @ttl_cache(900)
-def resource_series(symbol):
+def resource_series(symbol, period="max"):
     symbol = (symbol or "").upper()
     if symbol not in RESOURCE_TICKERS:
         raise ValueError(f"Unsupported commodity symbol '{symbol}'.")
+    periods = {
+        "1w": "5d",
+        "30d": "1mo",
+        "90d": "3mo",
+        "180d": "6mo",
+        "365d": "1y",
+        "max": "max",
+    }
+    if period not in periods:
+        raise ValueError(f"Unsupported history range '{period}'.")
     response = requests.get(
         f"https://query1.finance.yahoo.com/v8/finance/chart/{YAHOO_TICKERS[symbol]}",
-        params={"range": "1y", "interval": "1d"},
+        params={"range": periods[period], "interval": "1d"},
         headers={"User-Agent": "Mozilla/5.0 (compatible; EconDashboard/1.0)"},
         timeout=20,
     )

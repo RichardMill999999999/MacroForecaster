@@ -13,6 +13,12 @@ in the existing `TimeSeriesHistory` database.
 
 Check `http://localhost:5000/health` to see which integrations are configured. Never commit `.env`.
 
+The macro atlas uses delayed Yahoo Finance futures history as a fallback when no Finnhub stream key is
+configured. Commodity charts support 1 week, 30, 90, 180, and 365 days, plus each provider's maximum
+available history. Its floating Orbit guide uses `OPENAI_API_KEY2` (DeepSeek) to summarize the visible
+dashboard and the latest country or commodity news already loaded by the page; it refreshes once a minute
+while the tab is visible and can be hidden or refreshed manually.
+
 The forecast page uses Polygon daily aggregate bars and reference-company details, plus Alpaca option
 snapshots and the latest stock quote/bar. Its market-context panel shows market capitalization when Polygon
 provides it, session volume/trade counts, candle-direction volume estimates, and quote-level bid/ask sizes.

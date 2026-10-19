@@ -621,7 +621,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import Globe from "react-globe.gl";
 import axios from "axios";
 import HomeGraphs from "../../../variable/controllers/HomeControllers/HomeGraphs";
-import astronaut from "../../../variable/assets/fotos/space-dance-nasa.gif";
 import FredCategoryExplorer from "./Explorers/USMAP";
 import TSLookUpTool from '../../../pages/components/InitialPanel/TSLookUpTool'
 import TimeSeriesHistory from "../InitialPanel/TimeSeriesHistory";
@@ -633,6 +632,7 @@ import NYTExplorer from "./Explorers/NYTExplorer";
 import WorldCountryExplorer from "./Explorers/WorldCountryExplorer";
 import CountryComparison from "./Explorers/CountryComparison";
 import AIChatPanel from "../AIChatPanel";
+import MacroInsightMascot from "./MacroInsightMascot";
 import "./MacroeconomiaV2.css";
 /* ===================== HELPERS ===================== */
 const normalize = s =>
@@ -847,6 +847,11 @@ const MacroeconomiaV2 = () => {
     globeRef.current?.pointOfView({ lat, lng, altitude: 0.6 }, 1200);
   };
 
+  const insightSource = macroChatContexts.commodity
+    || macroChatContexts.comparison
+    || macroChatContexts.country
+    || null;
+
   /* ===================== RENDER ===================== */
   return (
     <div className="macro-v2-shell">
@@ -869,16 +874,6 @@ const MacroeconomiaV2 = () => {
         onPolygonHover={setHoveredCountry}
         onPolygonClick={onCountryClick}
       />
-
-      {/* ASTRONAUT */}
-      <a
-        className="macro-v2-astronaut-button"
-        href="/"
-        aria-label="Go to the forecaster"
-        title="Go to the forecaster"
-      >
-        <img src={astronaut} alt="" aria-hidden="true" />
-      </a>
 
       <div className="macro-v2-brand">
         <span className="macro-v2-kicker">WORLD ECONOMY</span>
@@ -919,10 +914,6 @@ const MacroeconomiaV2 = () => {
           {selectionNotice && <div className="macro-v2-selection-notice">{selectionNotice}</div>}
         </div>
       )}
-      <div className="macro-v2-map-hint">
-        {isComparisonEnabled ? "Select up to six countries · select again to remove" : "Select a country to open its profile"}
-      </div>
-
       {/* CATEGORIES */}
       {/* <div className="eco-panel categories-panel">
        
@@ -1027,6 +1018,12 @@ const MacroeconomiaV2 = () => {
     />
   );
 })()}
+      <MacroInsightMascot
+        context={insightSource?.context ?? { selectedCountries }}
+        contextType={insightSource?.contextType ?? "country-profile"}
+        contextKey={insightSource?.contextKey ?? `macro:${selectedCountries.join("|")}`}
+        countries={selectedCountries}
+      />
       {/* PROFILE */}
       
 

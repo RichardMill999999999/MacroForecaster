@@ -10,6 +10,7 @@ import TimeSeriesHistory from "./components/InitialPanel/TimeSeriesHistory";
 import Ma from "./components/Macroeconomia/Macroeconomia";
 import Forecast from "./components/DataAnalysis/Forecast";
 import PortfolioLookout from "./components/DataAnalysis/PortfolioLookout";
+import MacroInsightMascot from "./components/Macroeconomia/MacroInsightMascot";
 import { NavLink, useSearchParams } from "react-router-dom";
 import MacroEconomia from "./components/Macroeconomia/Macroeconomia";
 import FredCategoryExplorer from "./components/Macroeconomia/Explorers/USMAP";
@@ -106,6 +107,14 @@ export const Home = () => {
         {workspaceView === "portfolio"
           ? <PortfolioLookout />
           : <Forecast initialTicker={searchParams.get("ticker")} />}
+        <MacroInsightMascot
+          contextType="workspace"
+          contextKey={`workspace:${workspaceView}:${searchParams.get("ticker") || ""}`}
+          context={{
+            workspaceView,
+            ticker: searchParams.get("ticker") || null,
+          }}
+        />
         <div id="worklog"></div>
       </main>
 
