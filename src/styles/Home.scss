@@ -1,0 +1,316 @@
+// Home.scss
+
+// Color Variables (Aesthetic, muted palette)
+$backG: #6E7B63;
+$surface: #3B5760 ;
+$accent-color: #8C7A6B;
+$text-primary: #F2F4F3 ;
+$text-secondary: #F2F4F3;
+$font-family: 'Helvetica Neue', Arial, sans-serif;
+
+body {
+  margin: 0;
+  padding: 0;
+  background: $backG;
+  font-family: $font-family;
+  color: $text-primary;
+}
+
+.Home {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 14% 0%, rgba(59, 87, 96, 0.12), transparent 42%),
+    #f5f7f6;
+  color: #19272b;
+}
+
+.home-main {
+  width: 100%;
+}
+
+.home-route-nav {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 1rem clamp(1rem, 4vw, 3rem);
+}
+
+.home-workspace-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-right: auto;
+  padding: 0.22rem;
+  border: 1px solid rgba(26, 48, 52, 0.12);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 8px 22px rgba(20, 31, 33, 0.07);
+}
+
+.home-workspace-switch button {
+  min-height: 36px;
+  padding: 0.48rem 0.78rem;
+  border: 0;
+  border-radius: 0.68rem;
+  background: transparent;
+  color: #52666a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+
+  &:hover {
+    color: #244e4c;
+    background: rgba(50, 111, 101, 0.08);
+  }
+
+  &.active {
+    background: #326f65;
+    color: #fff;
+    box-shadow: 0 4px 10px rgba(38, 92, 82, 0.2);
+  }
+
+  &:focus-visible {
+    outline: 3px solid rgba(78, 141, 126, 0.3);
+    outline-offset: 2px;
+  }
+}
+
+.home-route-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 42px;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid rgba(242, 244, 243, 0.24);
+  border-radius: 0.8rem;
+  background: rgba(26, 48, 52, 0.58);
+  color: $text-primary;
+  font-size: 0.85rem;
+  font-weight: 650;
+  text-decoration: none;
+  box-shadow: 0 8px 22px rgba(20, 31, 33, 0.12);
+  backdrop-filter: blur(10px);
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+
+  &:hover,
+  &.active {
+    border-color: rgba(242, 244, 243, 0.55);
+    background: $surface;
+    color: $text-primary;
+    box-shadow: 0 10px 26px rgba(20, 31, 33, 0.2);
+    transform: translateY(-1px);
+  }
+
+  &:focus-visible {
+    outline: 3px solid rgba(242, 244, 243, 0.7);
+    outline-offset: 3px;
+  }
+}
+
+.home-route-icon {
+  display: grid;
+  width: 1.45rem;
+  height: 1.45rem;
+  place-items: center;
+  border-radius: 0.45rem;
+  background: rgba(242, 244, 243, 0.12);
+  font-size: 1rem;
+}
+
+.home-route-arrow {
+  margin-left: 0.15rem;
+  color: rgba(242, 244, 243, 0.66);
+  font-size: 0.8rem;
+}
+
+.Home-bienvenida {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 1.5rem clamp(1.25rem, 4vw, 3rem) 1.1rem;
+  color: #1b2e35;
+  text-align: left;
+
+  h1 {
+    margin: 0;
+    color: inherit;
+    font-size: clamp(1.8rem, 4vw, 2.7rem);
+    font-weight: 650;
+    letter-spacing: -0.045em;
+    line-height: 1.1;
+  }
+
+  h3 {
+    margin: 0.45rem 0 0;
+    color: #647579;
+    font-size: 0.95rem;
+    font-weight: 450;
+  }
+}
+#searchTable{
+  max-height: 350px;
+  overflow-y: auto;
+  display: block;}
+// Header Section
+#Header {
+  background: $surface;
+  color: $accent-color;
+  padding: 2rem 1rem;
+  text-align: center;
+
+  h1 {
+    margin: 0;
+    font-size: 2.75rem;
+    font-weight: 300;
+    letter-spacing: 0.05em;
+  }
+}
+
+// Initial Panel
+#InitialPanel {
+  background: $surface;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  margin: 2rem auto;
+  max-width: 1100px;
+
+  .toggleHeader {
+    font-size: 1.5rem;
+    font-weight: 400;
+    margin-bottom: 1rem;
+    color: $text-primary;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    &:after {
+      content: '▾';
+      font-size: 0.75rem;
+      transition: transform 0.3s;
+    }
+    &.active:after {
+      transform: rotate(-180deg);
+    }
+  }
+
+  .togglerSibling {
+    overflow: hidden;
+    transition: max-height 0.4s ease;
+    &.hidden { max-height: 0; }
+    &:not(.hidden) { max-height: 600px; }
+  }
+
+  select,
+  input[type='text'],
+  input[type='date'] {
+    width: 100%;
+    padding: 0.75rem;
+    margin: 0.75rem 0;
+    background: darken($surface, 5%);
+    border: 1px solid darken($surface, 20%);
+    border-radius: 0.5rem;
+    color: $text-primary;
+    font-size: 1rem;
+
+    &:focus {
+      border-color: $accent-color;
+      outline: none;
+      box-shadow: 0 0 0 3px rgba($accent-color, 0.3);
+    }
+  }
+
+  .actionButton,
+  button {
+    background: $accent-color;
+    color: $surface;
+    border: none;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1.25rem;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s;
+
+    &:hover {
+      background: lighten($accent-color, 10%);
+      transform: translateY(-2px);
+    }
+    &:active {
+      transform: translateY(0);
+    }
+  }
+}
+
+// Graph Buttons and Hidden Elements
+.graphButtonsTop {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+.hidden {
+  display: none;
+}
+
+// Worklog Items
+.worklogItem {
+  padding: 0.5rem 0;
+  border-bottom: 1px dashed darken($surface, 15%);
+  color: $text-secondary;
+}
+
+// List Groups
+.list-group {
+  margin-top: 2rem;
+
+  .list-group-item {
+    background: $surface;
+    border: 1px solid darken($surface, 20%);
+    border-radius: 0.5rem;
+    margin-bottom: 0.75rem;
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: $text-primary;
+    transition: background 0.2s;
+
+    &:hover {
+      background: darken($surface, 5%);
+    }
+  }
+}
+
+// Responsive
+@media (max-width: 768px) {
+  .home-route-nav {
+    justify-content: space-between;
+    flex-wrap: wrap;
+    padding: 0.75rem 1rem 0;
+  }
+
+  .home-workspace-switch {
+    margin-right: 0;
+  }
+
+  .Home-bienvenida {
+    padding-top: 1.25rem;
+  }
+
+  #Header h1 {
+    font-size: 2rem;
+  }
+  #InitialPanel {
+    padding: 1rem;
+  }
+  .actionButton,
+  button {
+    width: 100%;
+  }
+}

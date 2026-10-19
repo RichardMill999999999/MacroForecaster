@@ -1,0 +1,198 @@
+[
+    {
+        "name": "Arizona Cardinals",
+        "id": 1,
+        "CID": "ArizonaCardinals",
+        "link": "/ArizonaCardinals"
+    },
+    {
+        "name": "Atlanta Falcons",
+        "id": 2,
+        "CID": "AtlantaFalcons",
+        "link": "/AtlantaFalcons"
+    },
+    {
+        "name": "Baltimore Ravens",
+        "id": 3,
+        "CID": "BaltimoreRavens",
+        "link": "/BaltimoreRavens"
+    },
+    {
+        "name": "Buffalo Bills",
+        "id": 4,
+        "CID": "BuffaloBills",
+        "link": "/BuffaloBills"
+    },
+    {
+        "name": "Carolina Panthers",
+        "id": 5,
+        "CID": "CarolinaPanthers",
+        "link": "/CarolinaPanthers"
+    },
+    {
+        "name": "Chicago Bears",
+        "id": 6,
+        "CID": "ChicagoBears",
+        "link": "/ChicagoBears"
+    },
+    {
+        "name": "Cincinnati Bengals",
+        "id": 7,
+        "CID": "CincinnatiBengals",
+        "link": "/CincinnatiBengals"
+    },
+    {
+        "name": "Cleveland Browns",
+        "id": 8,
+        "CID": "ClevelandBrowns",
+        "link": "/ClevelandBrowns"
+    },
+    {
+        "name": "Dallas Cowboys",
+        "id": 9,
+        "CID": "DallasCowboys",
+        "link": "/DallasCowboys"
+    },
+    {
+        "name": "Denver Broncos",
+        "id": 10,
+        "CID": "DenverBroncos",
+        "link": "/DenverBroncos"
+    },
+    {
+        "name": "Detroit Lions",
+        "id": 11,
+        "CID": "DetroitLions",
+        "link": "/DetroitLions"
+    },
+    {
+        "name": "Green Bay Packers",
+        "id": 12,
+        "CID": "GreenBayPackers",
+        "link": "/GreenBayPackers"
+    },
+    {
+        "name": "Houston Texans",
+        "id": 13,
+        "CID": "HoustonTexans",
+        "link": "/HoustonTexans"
+    },
+    {
+        "name": "Indianapolis Colts",
+        "id": 14,
+        "CID": "IndianapolisColts",
+        "link": "/IndianapolisColts"
+    },
+    {
+        "name": "Jacksonville Jaguars",
+        "id": 15,
+        "CID": "JacksonvilleJaguars",
+        "link": "/JacksonvilleJaguars"
+    },
+    {
+        "name": "Kansas City Chiefs",
+        "id": 16,
+        "CID": "KansasCityChiefs",
+        "link": "/KansasCityChiefs"
+    },
+    {
+        "name": "Las Vegas Raiders",
+        "id": 17,
+        "CID": "LasVegasRaiders",
+        "link": "/LasVegasRaiders"
+    },
+    {
+        "name": "Los Angeles Chargers",
+        "id": 18,
+        "CID": "LosAngelesChargers",
+        "link": "/LosAngelesChargers"
+    },
+    {
+        "name": "Los Angeles Rams",
+        "id": 19,
+        "CID": "LosAngelesRams",
+        "link": "/LosAngelesRams"
+    },
+    {
+        "name": "Miami Dolphins",
+        "id": 20,
+        "CID": "MiamiDolphins",
+        "link": "/MiamiDolphins"
+    },
+    {
+        "name": "Minnesota Vikings",
+        "id": 21,
+        "CID": "MinnesotaVikings",
+        "link": "/MinnesotaVikings"
+    },
+    {
+        "name": "New England Patriots",
+        "id": 22,
+        "CID": "NewEnglandPatriots",
+        "link": "/NewEnglandPatriots"
+    },
+    {
+        "name": "New Orleans Saints",
+        "id": 23,
+        "CID": "NewOrleansSaints",
+        "link": "/NewOrleansSaints"
+    },
+    {
+        "name": "New York Giants",
+        "id": 24,
+        "CID": "NewYorkGiants",
+        "link": "/NewYorkGiants"
+    },
+    {
+        "name": "New York Jets",
+        "id": 25,
+        "CID": "NewYorkJets",
+        "link": "/NewYorkJets"
+    },
+    {
+        "name": "Philadelphia Eagles",
+        "id": 26,
+        "CID": "PhiladelphiaEagles",
+        "link": "/PhiladelphiaEagles"
+    },
+    {
+        "name": "Pittsburgh Steelers",
+        "id": 27,
+        "CID": "PittsburghSteelers",
+        "link": "/PittsburghSteelers"
+    },
+    {
+        "name": "San Francisco 49ers",
+        "id": 28,
+        "CID": "SanFrancisco49ers",
+        "link": "/SanFrancisco49ers"
+    },
+    {
+        "name": "Seattle Seahawks",
+        "id": 29,
+        "CID": "SeattleSeahawks",
+        "link": "/SeattleSeahawks"
+    },
+    {
+        "name": "Tampa Bay Buccaneers",
+        "id": 30,
+        "CID": "TampaBayBuccaneers",
+        "link": "/TampaBayBuccaneers"
+    },
+    {
+        "name": "Tennessee Titans",
+        "id": 31,
+        "CID": "TennesseeTitans",
+        "link": "/TennesseeTitans"
+    },
+    {
+        "name": "Washington Football Team",
+        "id": 32,
+        "CID": "WashingtonFootballTeam",
+        "link": "/WashingtonFootballTeam"
+    }
+
+
+
+
+]

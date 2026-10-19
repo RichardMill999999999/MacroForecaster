@@ -1,0 +1,335 @@
+.macro-commodity-bar {
+  position: fixed;
+  z-index: 24;
+  top: 102px;
+  right: 18px;
+  left: 18px;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 14px;
+  background: rgba(7, 16, 27, 0.82);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(14px);
+  scrollbar-width: none;
+}
+
+.macro-commodity-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.macro-commodity-tile {
+  display: grid;
+  min-width: 128px;
+  gap: 7px;
+  padding: 8px 9px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
+  background: rgba(17, 37, 47, 0.88);
+  color: #e8f1f2;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.macro-commodity-tile:hover,
+.macro-commodity-tile.active {
+  border-color: #69d6c3;
+  background: rgba(27, 65, 71, 0.96);
+  transform: translateY(-1px);
+}
+
+.macro-commodity-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #9db2bc;
+  font-size: 9px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.macro-commodity-name img {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 5px;
+  object-fit: contain;
+}
+
+.macro-commodity-quote {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.macro-commodity-tile strong {
+  color: #f2fbfa;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.macro-commodity-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.macro-commodity-change.up {
+  color: #67e8a5;
+}
+
+.macro-commodity-change.down {
+  color: #ff8181;
+}
+
+.macro-commodity-error {
+  align-self: center;
+  padding: 4px 8px;
+  color: #fecaca;
+  font-size: 10px;
+}
+
+.macro-commodity-details {
+  position: fixed;
+  z-index: 45;
+  top: 164px;
+  right: 18px;
+  display: flex;
+  width: min(470px, calc(100vw - 36px));
+  max-height: calc(100vh - 184px);
+  flex-direction: column;
+  overflow: auto;
+  padding: 17px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 16px;
+  background: rgba(7, 16, 27, 0.97);
+  color: #edf5f6;
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.5);
+  scrollbar-color: #526977 transparent;
+  scrollbar-width: thin;
+}
+
+.macro-commodity-details-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.macro-commodity-details-header h2 {
+  margin: 3px 0 0;
+  color: #f2fbfa;
+  font-size: 21px;
+}
+
+.macro-commodity-details-header > button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: #edf5f6;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.macro-commodity-kicker {
+  color: #79d7c8;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+}
+
+.macro-commodity-chart {
+  flex: 0 0 220px;
+  width: 100%;
+  height: 220px;
+  min-height: 220px;
+  margin-top: 12px;
+}
+
+.macro-commodity-status {
+  margin: 12px 0;
+  color: #a8bac6;
+  font-size: 11px;
+}
+
+.macro-commodity-forecast-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 0 12px;
+  padding: 10px;
+  border: 1px solid rgba(105, 214, 195, 0.24);
+  border-radius: 10px;
+  background: rgba(28, 72, 74, 0.32);
+  color: #b8cccf;
+  font-size: 10px;
+}
+
+.macro-commodity-forecast-link a {
+  color: #84e5d4;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.macro-commodity-forecast-link a:hover {
+  text-decoration: underline;
+}
+
+.macro-commodity-news h3 {
+  margin: 4px 0 8px;
+  color: #e8f1f2;
+  font-size: 13px;
+}
+
+.macro-commodity-distribution {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+
+.macro-commodity-distribution > button {
+  padding: 9px 10px;
+  border: 1px solid rgba(105, 214, 195, 0.35);
+  border-radius: 9px;
+  background: rgba(28, 72, 74, 0.32);
+  color: #84e5d4;
+  font-size: 10px;
+  font-weight: 750;
+  text-align: left;
+  cursor: pointer;
+}
+
+.macro-commodity-distribution > button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.macro-commodity-distribution h3 {
+  margin: 4px 0 0;
+  color: #e8f1f2;
+  font-size: 13px;
+}
+
+.macro-commodity-distribution-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.macro-commodity-distribution-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 8px;
+  padding: 7px 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  color: #dce8e9;
+  font-size: 10px;
+}
+
+.macro-commodity-distribution-list li > strong {
+  color: #f2fbfa;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.macro-commodity-distribution-list li > small {
+  grid-column: 1 / -1;
+  color: #8da1ab;
+  font-size: 9px;
+  text-align: right;
+}
+
+.macro-commodity-source {
+  color: #84e5d4;
+  font-size: 10px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.macro-commodity-source:hover {
+  text-decoration: underline;
+}
+
+.macro-commodity-news-item {
+  padding: 9px 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.macro-commodity-news-item > a {
+  display: grid;
+  gap: 4px;
+  color: #dce8e9;
+  text-decoration: none;
+}
+
+.macro-commodity-news-item > a:hover strong {
+  color: #84e5d4;
+}
+
+.macro-commodity-news-item > a strong {
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.macro-commodity-news-item > a span {
+  color: #8da1ab;
+  font-size: 9px;
+}
+
+.macro-commodity-news-item .article-ai-analyze-button,
+.macro-commodity-news-item .article-ai-result button {
+  border-color: rgba(105, 214, 195, 0.45);
+  background: rgba(28, 72, 74, 0.32);
+  color: #84e5d4;
+}
+
+.macro-commodity-news-item .article-ai-result {
+  border-color: rgba(105, 214, 195, 0.25);
+  background: rgba(28, 72, 74, 0.2);
+  color: #dce8e9;
+}
+
+.macro-commodity-news-item .article-ai-result h4 {
+  color: #84e5d4;
+}
+
+.macro-commodity-news-item .article-ai-error {
+  color: #fda4af;
+}
+
+@media (max-width: 640px) {
+  .macro-commodity-bar {
+    top: 100px;
+    right: 10px;
+    left: 10px;
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .macro-commodity-tile {
+    min-width: 112px;
+    padding: 7px 8px;
+  }
+
+  .macro-commodity-details {
+    top: 156px;
+    right: 10px;
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 176px);
+    padding: 13px;
+  }
+}

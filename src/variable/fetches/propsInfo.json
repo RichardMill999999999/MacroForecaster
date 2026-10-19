@@ -1,0 +1,231 @@
+[
+    {
+        "name":"Home",
+        "id": 0 ,
+        "link":"?",
+        "CID": "Home"
+    }, {
+        "name": "Arizona Cardinals",
+        "id": 1,
+        "CID": "ArizonaCardinals",
+        "link": "?ArizonaCardinals",
+        "merchCategories": ["Gorras"]
+    },
+    {
+        "name": "Atlanta Falcons",
+        "id": 2,
+        "CID": "AtlantaFalcons",
+        "link": "?AtlantaFalcons",
+        "merchCategories": ["Gorras", "Termos"]
+    },
+    {
+        "name": "Baltimore Ravens",
+        "id": 3,
+        "CID": "BaltimoreRavens",
+        "link": "?BaltimoreRavens",
+        "merchCategories": ["Gorras", "Termos", "Jerseys"]
+    },
+    {
+        "name": "Buffalo Bills",
+        "id": 4,
+        "CID": "BuffaloBills",
+        "link": "?BuffaloBills",
+        "merchCategories": ["Gorras", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Carolina Panthers",
+        "id": 5,
+        "CID": "CarolinaPanthers",
+        "link": "?CarolinaPanthers",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Chicago Bears",
+        "id": 6,
+        "CID": "ChicagoBears",
+        "link": "?ChicagoBears",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Cincinnati Bengals",
+        "id": 7,
+        "CID": "CincinnatiBengals",
+        "link": "?CincinnatiBengals",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Cleveland Browns",
+        "id": 8,
+        "CID": "ClevelandBrowns",
+        "link": "?ClevelandBrowns",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Dallas Cowboys",
+        "id": 9,
+        "CID": "DallasCowboys",
+        "link": "?DallasCowboys",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Denver Broncos",
+        "id": 10,
+        "CID": "DenverBroncos",
+        "link": "?DenverBroncos",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Detroit Lions",
+        "id": 11,
+        "CID": "DetroitLions",
+        "link": "?DetroitLions",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Green Bay Packers",
+        "id": 12,
+        "CID": "GreenBayPackers",
+        "link": "?GreenBayPackers",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Houston Texans",
+        "id": 13,
+        "CID": "HoustonTexans",
+        "link": "?HoustonTexans",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Indianapolis Colts",
+        "id": 14,
+        "CID": "IndianapolisColts",
+        "link": "?IndianapolisColts",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Jacksonville Jaguars",
+        "id": 15,
+        "CID": "JacksonvilleJaguars",
+        "link": "?JacksonvilleJaguars",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Kansas City Chiefs",
+        "id": 16,
+        "CID": "KansasCityChiefs",
+        "link": "?KansasCityChiefs",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Las Vegas Raiders",
+        "id": 17,
+        "CID": "LasVegasRaiders",
+        "link": "?LasVegasRaiders",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Los Angeles Chargers",
+        "id": 18,
+        "CID": "LosAngelesChargers",
+        "link": "?LosAngelesChargers",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Los Angeles Rams",
+        "id": 19,
+        "CID": "LosAngelesRams",
+        "link": "?LosAngelesRams",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Miami Dolphins",
+        "id": 20,
+        "CID": "MiamiDolphins",
+        "link": "?MiamiDolphins",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Minnesota Vikings",
+        "id": 21,
+        "CID": "MinnesotaVikings",
+        "link": "?MinnesotaVikings",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "New England Patriots",
+        "id": 22,
+        "CID": "NewEnglandPatriots",
+        "link": "?NewEnglandPatriots",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "New Orleans Saints",
+        "id": 23,
+        "CID": "NewOrleansSaints",
+        "link": "?NewOrleansSaints",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "New York Giants",
+        "id": 24,
+        "CID": "NewYorkGiants",
+        "link": "?NewYorkGiants",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "New York Jets",
+        "id": 25,
+        "CID": "NewYorkJets",
+        "link": "?NewYorkJets",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Philadelphia Eagles",
+        "id": 26,
+        "CID": "PhiladelphiaEagles",
+        "link": "?PhiladelphiaEagles",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Pittsburgh Steelers",
+        "id": 27,
+        "CID": "PittsburghSteelers",
+        "link": "?PittsburghSteelers",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "San Francisco 49ers",
+        "id": 28,
+        "CID": "SanFrancisco49ers",
+        "link": "?SanFrancisco49ers",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Seattle Seahawks",
+        "id": 29,
+        "CID": "SeattleSeahawks",
+        "link": "?SeattleSeahawks",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Tampa Bay Buccaneers",
+        "id": 30,
+        "CID": "TampaBayBuccaneers",
+        "link": "?TampaBayBuccaneers",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Tennessee Titans",
+        "id": 31,
+        "CID": "TennesseeTitans",
+        "link": "?TennesseeTitans",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    },
+    {
+        "name": "Washington Football Team",
+        "id": 32,
+        "CID": "WashingtonFootballTeam",
+        "link": "?WashingtonFootballTeam",
+        "merchCategories": ["Gorras", "Termos", "Jerseys", "Balones", "t-Shirts"]
+    }
+]

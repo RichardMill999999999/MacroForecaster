@@ -1,0 +1,351 @@
+.country-compare {
+  padding: 22px;
+  color: #18272d;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.country-compare-header,
+.country-compare-section-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.country-compare-header h2 {
+  margin: 4px 0 0;
+  color: #14252b;
+  font-size: 23px;
+  letter-spacing: -0.035em;
+}
+
+.country-compare-header p,
+.country-compare-section-title p {
+  margin: 5px 0 0;
+  color: #68777d;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.country-compare-eyebrow {
+  color: #36877d;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.country-compare-count {
+  flex: none;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: #e5f3f0;
+  color: #216960;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.country-compare-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 16px 0;
+}
+
+.country-compare-selected button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border: 1px solid #dbe5e8;
+  border-radius: 999px;
+  background: #fff;
+  color: #2d3d43;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.country-compare-selected button > span:last-child {
+  color: #78888d;
+  font-size: 14px;
+}
+
+.country-compare-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.country-compare-notice,
+.country-compare-error {
+  margin: 10px 0;
+  padding: 11px 12px;
+  border-radius: 9px;
+  background: #f0f5f6;
+  color: #5e7076;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.country-compare-error {
+  border: 1px solid #f4c9c9;
+  background: #fff4f3;
+  color: #a33636;
+}
+
+.country-compare-section {
+  margin-top: 15px;
+  padding: 15px;
+  border: 1px solid #e1e9eb;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.country-compare-section-title {
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.country-compare-section-title h3,
+.country-compare-region h3 {
+  margin: 0;
+  color: #1a3036;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.country-compare-rank-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.country-compare-rank-box {
+  min-width: 0;
+  padding: 12px 13px;
+  border: 1px solid #e5ebed;
+  border-radius: 11px;
+  background: #fbfcfc;
+}
+
+.country-compare-rank-box h4 {
+  margin: 0 0 9px;
+  color: #1a3036;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.country-compare-rank-box ol {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.country-compare-rank-box li {
+  display: grid;
+  grid-template-columns: 30px minmax(70px, 1fr) auto;
+  align-items: center;
+  column-gap: 7px;
+  row-gap: 2px;
+  padding: 7px 6px;
+  border-top: 1px solid #edf1f2;
+}
+
+.country-compare-rank-number {
+  grid-row: 1 / span 2;
+  color: #74848a;
+  font-size: 9px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.country-compare-rank-country {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: #243940;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.country-compare-national-country {
+  color: #243940;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.country-compare-rank-country .country-compare-dot {
+  flex: none;
+}
+
+.country-compare-rank-box li > strong {
+  color: #145e55;
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.country-compare-rank-box li > small {
+  grid-column: 2 / -1;
+  color: #98a4a8;
+  font-size: 8px;
+  text-align: right;
+}
+
+.country-compare-rank-box li.unavailable .country-compare-rank-country,
+.country-compare-rank-box li.unavailable > strong {
+  color: #99a5a9;
+}
+
+.country-compare-scale {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+  border-top-color: #dae5e5;
+}
+
+.country-compare-scale > span {
+  color: #65757a;
+  font-size: 9px;
+}
+
+.country-compare-scale-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.country-compare-scale-list > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid #e5ebed;
+  border-radius: 8px;
+  color: #465b61;
+  font-size: 9px;
+}
+
+.country-compare-scale-list small {
+  color: #74848a;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.country-compare-scale-list strong {
+  color: #145e55;
+  font-size: 10px;
+}
+
+.country-compare-scale-list .country-compare-dot {
+  width: 7px;
+  height: 7px;
+}
+
+.country-compare-chart-title {
+  flex-wrap: wrap;
+}
+
+.country-compare-chart-title select {
+  min-width: 180px;
+  padding: 7px 9px;
+  border: 1px solid #d7e1e4;
+  border-radius: 8px;
+  background: #fff;
+  color: #263d43;
+  font-size: 10px;
+}
+
+.country-compare-chart {
+  width: 100%;
+  height: 280px;
+}
+
+.country-compare-region {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 14px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid #d9eae6;
+  border-radius: 12px;
+  background: linear-gradient(120deg, #f0f8f6, #fbfdfc);
+}
+
+.country-compare-region h3 {
+  margin-top: 3px;
+}
+
+.country-compare-region p {
+  margin: 4px 0 0;
+  color: #61747a;
+  font-size: 10px;
+}
+
+.country-compare-region > strong {
+  color: #1b5e55;
+  font-size: 17px;
+}
+
+.country-compare-region > span {
+  grid-column: 1 / -1;
+  margin-top: 9px;
+  color: #60767a;
+  font-size: 10px;
+}
+
+.country-compare-caveat {
+  margin: 10px 2px;
+  color: #7c898d;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.country-compare-button {
+  padding: 10px 13px;
+  border: 0;
+  border-radius: 9px;
+  background: #173f45;
+  color: #f1faf8;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.country-compare-button:disabled {
+  background: #9baaad;
+  cursor: not-allowed;
+}
+
+.country-compare-analysis {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #e4ebed;
+  border-radius: 10px;
+  background: #fbfcfc;
+}
+
+@media (max-width: 640px) {
+  .country-compare {
+    padding: 14px;
+  }
+
+  .country-compare-header h2 {
+    font-size: 19px;
+  }
+
+  .country-compare-section {
+    padding: 11px;
+  }
+
+  .country-compare-chart {
+    height: 240px;
+  }
+}

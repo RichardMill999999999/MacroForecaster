@@ -1,0 +1,89 @@
+/* 1 */
+$backG: rgb(7, 1, 55);
+
+.ActMenu{
+    position: fixed;
+    left: 0px;
+}
+body {
+    color: rgb(173, 171, 169);
+    background-color: rgb(7, 1, 55);
+}
+
+/* 2 */
+.hidden {
+    display: none;
+}
+
+/* 3 */
+.MenuBtn{
+    &_buttonToggler {
+        text-decoration: underline;
+        cursor: pointer;
+        background-color: transparent;
+        color: white;
+        border: none;
+        position: relative;
+        text-align: left;
+        display: inline-block;
+        left: 0;
+    }
+}
+.buttonToggler {
+    text-decoration: underline;
+    cursor: pointer;
+    background-color: transparent;
+    color: white;
+    border: none;
+    text-align: left;
+    display: inline-block;
+}
+
+/* 4 */
+.inflationTable {
+    position: absolute;
+    background-color: black;
+    color: wheat;
+    width: 600px;
+    left: 300px;
+    top: 70px;
+}
+
+/* 5 */
+#Plots {
+    position: absolute;
+    color: wheat;
+    width: 900px;
+    height: 80%;
+    left: 100px;
+    top: 500px;
+}
+.solidBackground{
+    background-color: $backG;
+    z-index: 1;
+}
+/* 6 */
+.subtitle {
+    color: white;
+}
+
+/* 7 */
+.text-underline {
+    text-decoration: underline;
+}
+
+/* 8 */
+.th, td {
+    padding-right: 5px;
+    padding-left: 5px;
+    padding-bottom: 5px;
+    text-align: left;
+    color: white;
+}
+
+/* 9 */
+.toggler1stChild {
+    border-radius: 30px;
+    border: 3px solid blue;
+}
+

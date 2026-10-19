@@ -1,0 +1,14 @@
+.categoriesButton{
+    height: 200px;
+    border: lavender 2px dashed;
+    display: flex;
+    flex-direction: column;
+    justify-content: end;
+    align-items: center;
+
+}
+#InitialCategories{
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+}
