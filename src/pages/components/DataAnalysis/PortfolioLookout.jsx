@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
   Cell,
@@ -403,6 +403,11 @@ export default function PortfolioLookout() {
     item && typeof item.id === "string" && item.portfolio && Array.isArray(item.portfolio.holdings)
   ));
   const [sessionError, setSessionError] = useState(savedSessionsState.error);
+  const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
+  const [workspaceLoadAttempt, setWorkspaceLoadAttempt] = useState(0);
+  const [workspaceStatus, setWorkspaceStatus] = useState("loading");
+  const [workspaceError, setWorkspaceError] = useState("");
+  const workspaceSaveQueue = useRef(Promise.resolve());
   const [compareIds, setCompareIds] = useState([]);
   const [comparisonResults, setComparisonResults] = useState([]);
   const [comparisonLoading, setComparisonLoading] = useState(false);
@@ -421,6 +426,84 @@ export default function PortfolioLookout() {
 
   const portfolio = portfolios.find((item) => item.id === selectedId) || portfolios[0] || null;
   const profile = profiles.find((item) => item.id === profileId) || profiles[0] || DEFAULT_PROFILE;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+    setWorkspaceLoaded(false);
+    setWorkspaceStatus("loading");
+    setWorkspaceError("");
+
+    fetch(`${BACKEND_URL}/portfolio/workspace`, { signal: controller.signal })
+      .then(async (response) => {
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
+        if (!Array.isArray(body.profiles) || !Array.isArray(body.portfolios) || !Array.isArray(body.sessions)) {
+          throw new Error("The MongoDB workspace returned invalid data.");
+        }
+        return body;
+      })
+      .then((workspace) => {
+        if (cancelled || !workspace.exists) return;
+        const nextProfiles = workspace.profiles.length ? workspace.profiles : [{ ...DEFAULT_PROFILE }];
+        setProfiles(nextProfiles);
+        setPortfolios(workspace.portfolios);
+        setSessions(workspace.sessions.filter((item) =>
+          item && typeof item.id === "string" && item.portfolio && Array.isArray(item.portfolio.holdings)
+        ));
+        setProfileId((current) => nextProfiles.some((item) => item.id === current) ? current : nextProfiles[0].id);
+        setSelectedId((current) => workspace.portfolios.some((item) => item.id === current)
+          ? current
+          : workspace.portfolios[0]?.id || "");
+      })
+      .catch((error) => {
+        if (cancelled || error.name === "AbortError") return;
+        setWorkspaceStatus("error");
+        setWorkspaceError(`MongoDB workspace could not be loaded: ${error.message}. Local browser data is still available.`);
+      })
+      .finally(() => {
+        if (!cancelled) setWorkspaceLoaded(true);
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [workspaceLoadAttempt]);
+
+  useEffect(() => {
+    if (!workspaceLoaded) return undefined;
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      workspaceSaveQueue.current = workspaceSaveQueue.current.catch(() => {}).then(async () => {
+        if (cancelled) return;
+        setWorkspaceStatus("saving");
+        try {
+          const response = await fetch(`${BACKEND_URL}/portfolio/workspace`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ profiles, portfolios, sessions }),
+          });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
+          if (!cancelled) {
+            setWorkspaceStatus("synced");
+            setWorkspaceError("");
+          }
+        } catch (error) {
+          if (!cancelled) {
+            setWorkspaceStatus("error");
+            setWorkspaceError(`MongoDB workspace could not be saved: ${error.message}. Changes remain in this browser.`);
+          }
+        }
+      });
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [portfolios, profiles, sessions, workspaceLoaded]);
 
   useEffect(() => {
     if (savedState.error) return;
@@ -647,7 +730,7 @@ export default function PortfolioLookout() {
   };
 
   const removePortfolio = () => {
-    if (!portfolio || !window.confirm(`Delete portfolio "${portfolio.name}" from this browser?`)) return;
+    if (!portfolio || !window.confirm(`Delete portfolio "${portfolio.name}" from your MongoDB workspace?`)) return;
     const remaining = portfolios.filter((item) => item.id !== portfolio.id);
     setPortfolios(remaining);
     setSelectedId(remaining[0]?.id || "");
@@ -672,12 +755,29 @@ export default function PortfolioLookout() {
           <h2>Portfolio lookout</h2>
           <p>Build and monitor multiple hypothetical portfolios with market history, risk measures, allocation, and editable return assumptions.</p>
         </div>
-        <span className="portfolio-local-badge">Saved in this browser</span>
+        <span className="portfolio-local-badge" role="status" aria-live="polite">
+          {workspaceStatus === "loading" ? "Loading MongoDB…"
+            : workspaceStatus === "saving" ? "Saving to MongoDB…"
+              : workspaceStatus === "error" ? "MongoDB unavailable"
+                : "Saved to MongoDB"}
+        </span>
       </header>
 
       {storageError && <div className="portfolio-alert" role="alert">{storageError}</div>}
       {profileError && <div className="portfolio-alert" role="alert">{profileError}</div>}
       {sessionError && <div className="portfolio-alert" role="alert">{sessionError}</div>}
+      {workspaceError && (
+        <div className="portfolio-alert" role="alert">
+          {workspaceError}{" "}
+          <button
+            className="portfolio-secondary-button"
+            type="button"
+            onClick={() => setWorkspaceLoadAttempt((attempt) => attempt + 1)}
+          >
+            Retry MongoDB
+          </button>
+        </div>
+      )}
 
       <div className="portfolio-workspace">
         <aside className="portfolio-sidebar">
@@ -757,7 +857,7 @@ export default function PortfolioLookout() {
                       </select>
                     </label>
                   </div>
-                  <p className="portfolio-chart-note">Profiles are local planning contexts. Risk labels use your selected tolerance; the target horizon and rebalance preference are context only. Forecast duration is set per portfolio, and contribution projections use that duration.</p>
+                  <p className="portfolio-chart-note">Profiles are saved with your MongoDB workspace. Risk labels use your selected tolerance; the target horizon and rebalance preference are context only. Forecast duration is set per portfolio, and contribution projections use that duration.</p>
                 </div>
                 <div className="portfolio-context-block">
                   <div className="portfolio-subhead"><strong>Saved simulation sessions</strong><span>{sessions.length} saved</span></div>
