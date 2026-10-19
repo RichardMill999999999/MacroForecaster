@@ -1,25 +1,29 @@
-.macro-insight-mascot {
+.macro-insight-stage {
   position: fixed;
   z-index: 60;
-  bottom: 18px;
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
+  inset: 0;
+  overflow: hidden;
   pointer-events: none;
-  transition: left 700ms ease, right 700ms ease;
 }
 
-.macro-insight-mascot.right {
-  right: 18px;
-}
-
-.macro-insight-mascot.left {
-  left: 18px;
+.macro-insight-flight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 66px;
+  height: 66px;
+  will-change: transform;
 }
 
 .macro-insight-bubble {
-  width: min(330px, calc(100vw - 100px));
+  position: absolute;
+  z-index: 61;
+  top: 0;
+  left: 0;
+  width: min(350px, calc(100vw - 32px));
+  max-height: calc(100vh - 24px);
   padding: 13px 14px 11px;
+  overflow: auto;
   border: 1px solid rgba(121, 215, 200, 0.38);
   border-radius: 15px;
   background: rgba(7, 16, 27, 0.96);
@@ -27,6 +31,9 @@
   box-shadow: 0 16px 44px rgba(0, 0, 0, 0.42);
   backdrop-filter: blur(16px);
   pointer-events: auto;
+  visibility: hidden;
+  will-change: transform;
+  animation: macro-insight-arrive 450ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 .macro-insight-bubble header,
@@ -66,6 +73,99 @@
   line-height: 1.6;
 }
 
+.macro-insight-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(38vh, 320px);
+  margin: 9px 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.macro-insight-message {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 94%;
+  padding: 8px 9px;
+  border: 1px solid rgba(121, 215, 200, 0.14);
+  border-radius: 10px;
+  background: rgba(121, 215, 200, 0.07);
+  color: #e8f1f2;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.macro-insight-message.user {
+  align-self: flex-end;
+  border-color: rgba(132, 170, 255, 0.2);
+  background: rgba(79, 112, 181, 0.18);
+}
+
+.macro-insight-message strong {
+  color: #79d7c8;
+  font-size: 9px;
+}
+
+.macro-insight-message.user strong {
+  color: #adc7ff;
+}
+
+.macro-insight-messages > small {
+  color: #8da1ab;
+  font-size: 10px;
+}
+
+.macro-insight-messages > small[role="alert"] {
+  color: #fecaca;
+}
+
+.macro-insight-chat-form {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.macro-insight-chat-form input {
+  min-width: 0;
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 10px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e8f1f2;
+  font: inherit;
+  font-size: 11px;
+}
+
+.macro-insight-chat-form input:focus {
+  border-color: rgba(121, 215, 200, 0.72);
+}
+
+.macro-insight-chat-form input::placeholder {
+  color: #8da1ab;
+}
+
+.macro-insight-chat-form button {
+  width: 34px;
+  flex: 0 0 34px;
+  border: 1px solid rgba(121, 215, 200, 0.4);
+  border-radius: 10px;
+  background: rgba(121, 215, 200, 0.13);
+  color: #a8f0e3;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.macro-insight-chat-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .macro-insight-bubble small {
   color: #fecaca;
   font-size: 10px;
@@ -78,82 +178,107 @@
 }
 
 .macro-insight-avatar {
+  position: relative;
   display: flex;
-  flex: none;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  width: 56px;
-  min-height: 56px;
+  width: 66px;
+  height: 66px;
   padding: 0;
-  border: 1px solid rgba(121, 215, 200, 0.36);
+  border: 1px solid rgba(121, 215, 200, 0.52);
   border-radius: 50%;
-  background: rgba(7, 16, 27, 0.82);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+  background:
+    radial-gradient(circle at 50% 45%, rgba(63, 151, 167, 0.72), rgba(7, 16, 27, 0.9) 70%);
+  box-shadow: 0 0 22px rgba(67, 208, 221, 0.45), 0 8px 24px rgba(0, 0, 0, 0.35);
   pointer-events: auto;
   cursor: pointer;
-  animation: macro-insight-float 3.8s ease-in-out infinite;
+  animation: macro-insight-craft-hover 2.8s ease-in-out infinite;
+}
+
+.macro-insight-avatar::before {
+  position: absolute;
+  z-index: 0;
+  right: -3px;
+  bottom: 10px;
+  width: 28px;
+  height: 13px;
+  border: 1px solid rgba(182, 237, 245, 0.7);
+  border-radius: 50%;
+  background: linear-gradient(90deg, rgba(121, 215, 200, 0.62), rgba(168, 240, 227, 0.16));
+  content: "";
+  transform: rotate(-15deg);
+}
+
+.macro-insight-avatar::after {
+  position: absolute;
+  z-index: 0;
+  right: -9px;
+  bottom: 13px;
+  width: 14px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a8f0e3;
+  box-shadow: 0 0 12px 5px rgba(121, 215, 200, 0.72);
+  content: "";
+  animation: macro-insight-thruster 700ms ease-in-out infinite alternate;
 }
 
 .macro-insight-avatar img {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 48px;
   height: 48px;
+  border: 1px solid rgba(226, 246, 247, 0.78);
   border-radius: 50%;
   object-fit: cover;
+  box-shadow: 0 0 12px rgba(133, 229, 221, 0.6);
 }
 
 .macro-insight-avatar span {
-  padding-right: 7px;
+  position: relative;
+  z-index: 1;
+  padding-right: 5px;
   color: #a8f0e3;
   font-size: 9px;
   font-weight: 750;
 }
 
-.macro-insight-mascot:not(.right) .macro-insight-avatar:has(span) {
-  flex-direction: row-reverse;
+.chat-open-mobile {
+  display: none;
 }
 
-@keyframes macro-insight-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
+.macro-insight-flight.parked .macro-insight-avatar {
+  box-shadow: 0 0 30px rgba(121, 215, 200, 0.72), 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+@keyframes macro-insight-craft-hover {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-4px) rotate(3deg); }
+}
+
+@keyframes macro-insight-thruster {
+  from { opacity: 0.45; transform: scaleX(0.72); }
+  to { opacity: 1; transform: scaleX(1.1); }
+}
+
+@keyframes macro-insight-arrive {
+  from { opacity: 0; translate: 0 -8px; }
+  to { opacity: 1; translate: 0 0; }
 }
 
 @media (max-width: 640px) {
-  .macro-insight-mascot {
-    bottom: 12px;
-  }
-
-  .macro-insight-mascot.right {
-    right: 10px;
-  }
-
-  .macro-insight-mascot.left {
-    left: 10px;
-  }
-
   .macro-insight-bubble {
-    width: min(280px, calc(100vw - 82px));
+    width: min(310px, calc(100vw - 24px));
     padding: 11px;
-  }
-
-  .macro-insight-avatar {
-    width: 48px;
-    min-height: 48px;
-  }
-
-  .macro-insight-avatar img {
-    width: 42px;
-    height: 42px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .macro-insight-avatar {
+  .macro-insight-avatar,
+  .macro-insight-avatar::after,
+  .macro-insight-bubble {
     animation: none;
-  }
-
-  .macro-insight-mascot {
-    transition: none;
   }
 }

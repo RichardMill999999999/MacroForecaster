@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../../apiUrl.js";
 
 // import React, { useEffect, useRef, useState } from "react";
 // import Globe from "react-globe.gl";
@@ -64,7 +65,7 @@
 //       .then(r => r.json())
 //       .then(setGeoData);
 
-//     axios.get("http://localhost:5000/Macroeconomics/Categories")
+//     axios.get(`${BACKEND_URL}/Macroeconomics/Categories`)
 //       .then(res => {
 //         const valid = [1,3,5,7,11,12,13,14,20,21];
 //         setCategories(res.data[1].filter(c => valid.includes(Number(c.id))));
@@ -158,7 +159,7 @@
 //       if (!c) continue;
 
 //       const r = await axios.get(
-//         `http://localhost:5000/Macroeconomics/IndicatorData/${indicator.id}/${c.id}?per_page=1000`
+//         `${BACKEND_URL}/Macroeconomics/IndicatorData/${indicator.id}/${c.id}?per_page=1000`
 //       );
 
 //       series.push({ country: name, data: r.data[1] });
@@ -273,7 +274,7 @@
 //             className="eco-btn"
 //             onClick={() =>
 //               axios
-//                 .get(`http://localhost:5000/Macroeconomics/obtainCategoryListing/${cat.id}`)
+//                 .get(`${BACKEND_URL}/Macroeconomics/obtainCategoryListing/${cat.id}`)
                
 //             }
 //           >
@@ -634,6 +635,8 @@ import CountryComparison from "./Explorers/CountryComparison";
 import AIChatPanel from "../AIChatPanel";
 import MacroInsightMascot from "./MacroInsightMascot";
 import "./MacroeconomiaV2.css";
+import geoData from "../../../variable/assets/videos/countries.geo.json";
+import countries from "../../../variable/assets/countriesList.json";
 /* ===================== HELPERS ===================== */
 const normalize = s =>
   s?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
@@ -670,8 +673,9 @@ const MacroeconomiaV2 = () => {
     String(today.getDate()).padStart(2, "0"),
   ].join("-");
   const globeRef = useRef();
-  const [geoData, setGeoData] = useState({ features: [] });
   const [selectedCountries, setSelectedCountries] = useState([]);
+  const [countryLocations, setCountryLocations] = useState({});
+  const [globeFocus, setGlobeFocus] = useState({ lat: 0, lng: 0 });
   const [categories, setCategories] = useState([]);
   const [indicators, setIndicators] = useState([]);
   const [isComparisonEnabled, setIsComparisonEnabled] = useState(false);
@@ -693,11 +697,7 @@ const MacroeconomiaV2 = () => {
 
   /* ===================== INIT ===================== */
   useEffect(() => {
-    fetch("../../../src/variable/assets/videos/countries.geo.json")
-      .then(r => r.json())
-      .then(setGeoData);
-
-    axios.get("http://localhost:5000/Macroeconomics/Categories")
+    axios.get(`${BACKEND_URL}/Macroeconomics/Categories`)
       .then(res => {
         const valid = [1,3,5,7,11,12,13,14,20,21];
         setCategories(res.data[1].filter(c => valid.includes(Number(c.id))));
@@ -719,6 +719,7 @@ const MacroeconomiaV2 = () => {
     setIsComparisonEnabled(v => {
       if (v) {
         setSelectedCountries([]);
+        setCountryLocations({});
         setIndicators([]);
         setLoadedSeries([]);
       }
@@ -727,11 +728,26 @@ const MacroeconomiaV2 = () => {
   };
   const closeCountryPanels = () => {
     setSelectedCountries([]);
+    setCountryLocations({});
     setIndicators([]);
     setLoadedSeries([]);
     setSelectionNotice("");
     setMacroChatContexts({});
     setIsComparisonEnabled(false);
+  };
+  const removeSelectedCountry = (name) => {
+    const remaining = selectedCountries.filter((country) => country !== name);
+    setSelectedCountries(remaining);
+    setCountryLocations((previous) => {
+      const next = { ...previous };
+      delete next[name];
+      return next;
+    });
+    const nextTarget = countryLocations[remaining[remaining.length - 1]];
+    if (nextTarget) {
+      setGlobeFocus({ lat: nextTarget.lat, lng: nextTarget.lng });
+      globeRef.current?.pointOfView({ lat: nextTarget.lat, lng: nextTarget.lng, altitude: 0.8 }, 900);
+    }
   };
   function handleClick(event) {
         const clickedElement = event.target.id;
@@ -780,10 +796,6 @@ const MacroeconomiaV2 = () => {
   const handleIndicatorClick = async indicator => {
     if (!selectedCountries.length) return;
 
-    const countries = await axios
-      .get("../../../src/variable/assets/countriesList.json")
-      .then(r => r.data);
-
     let series = [];
 
     for (const name of selectedCountries) {
@@ -797,7 +809,7 @@ const MacroeconomiaV2 = () => {
       if (!c) continue;
 
       const r = await axios.get(
-        `http://localhost:5000/Macroeconomics/IndicatorData/${indicator.id}/${c.id}?per_page=1000`
+        `${BACKEND_URL}/Macroeconomics/IndicatorData/${indicator.id}/${c.id}?per_page=1000`
       );
 
       series.push({ country: name, data: r.data[1] });
@@ -817,30 +829,44 @@ const MacroeconomiaV2 = () => {
     // deselect
     if (!isComparisonEnabled && selectedCountries[0] === name) {
       setSelectedCountries([]);
+      setCountryLocations({});
       return;
     }
    
     // comparison mode
     if (isComparisonEnabled) {
+      const alreadySelected = selectedCountries.includes(name);
+      if (!alreadySelected && selectedCountries.length >= 6) {
+        setSelectionNotice("Compare up to six countries at a time. Remove a country to add another.");
+        return;
+      }
+      const remaining = selectedCountries.filter((country) => country !== name);
+      const nextFocus = alreadySelected
+        ? countryLocations[remaining[remaining.length - 1]]
+        : { lat, lng };
+      if (nextFocus) {
+        setGlobeFocus({ lat: nextFocus.lat, lng: nextFocus.lng });
+        globeRef.current?.pointOfView({ lat: nextFocus.lat, lng: nextFocus.lng, altitude: 0.8 }, 900);
+      }
+      setSelectionNotice("");
       setSelectedCountries(prev => {
-        if (prev.includes(name)) {
-          setSelectionNotice("");
-          return prev.filter(country => country !== name);
-        }
-        if (prev.length >= 6) {
-          setSelectionNotice("Compare up to six countries at a time. Remove a country to add another.");
-          return prev;
-        }
-        setSelectionNotice("");
-        return [...prev, name];
+        return alreadySelected
+          ? prev.filter(country => country !== name)
+          : [...prev, name];
       });
-      globeRef.current?.pointOfView({ lat, lng, altitude: 0.8 }, 900);
+      setCountryLocations((previous) => {
+        const next = { ...previous };
+        if (alreadySelected) delete next[name];
+        else next[name] = { name, lat, lng };
+        return next;
+      });
       return;
     }
     setSelectionNotice("");
      // Select immediately. The country panel mounts now and each API
     // section manages its own loading state instead of blocking the map.
     setSelectedCountries([name]);
+    setCountryLocations({ [name]: { name, lat, lng } });
     setIndicators([]);
     setLoadedSeries([]);
 
@@ -851,6 +877,7 @@ const MacroeconomiaV2 = () => {
     || macroChatContexts.comparison
     || macroChatContexts.country
     || null;
+  const mascotTargetCountry = countryLocations[selectedCountries[selectedCountries.length - 1]] || null;
 
   /* ===================== RENDER ===================== */
   return (
@@ -902,14 +929,23 @@ const MacroeconomiaV2 = () => {
               <button
                 key={name}
                 type="button"
-                onClick={() => setSelectedCountries(prev => prev.filter(country => country !== name))}
+                onClick={() => removeSelectedCountry(name)}
                 title={`Remove ${name}`}
               >
                 <span style={{ background: ["#167d72", "#3569ad", "#b56827", "#9257a0", "#c34b59", "#5c7480"][index] }} />
                 {name}<b aria-hidden="true">×</b>
               </button>
             ))}
-            <button className="macro-v2-clear" type="button" onClick={() => setSelectedCountries([])}>Clear</button>
+            <button
+              className="macro-v2-clear"
+              type="button"
+              onClick={() => {
+                setSelectedCountries([]);
+                setCountryLocations({});
+              }}
+            >
+              Clear
+            </button>
           </div>
           {selectionNotice && <div className="macro-v2-selection-notice">{selectionNotice}</div>}
         </div>
@@ -923,7 +959,7 @@ const MacroeconomiaV2 = () => {
             className="eco-btn"
             onClick={() =>
               axios
-                .get(`http://localhost:5000/Macroeconomics/obtainCategoryListing/${cat.id}`)
+                .get(`${BACKEND_URL}/Macroeconomics/obtainCategoryListing/${cat.id}`)
                
             }
           >
@@ -964,7 +1000,7 @@ const MacroeconomiaV2 = () => {
     </button>
     <CountryComparison
       countryNames={selectedCountries}
-      onRemoveCountry={(name) => setSelectedCountries(prev => prev.filter(country => country !== name))}
+      onRemoveCountry={removeSelectedCountry}
       onChatContextChange={updateMacroChatContext}
     />
   </div>
@@ -1023,6 +1059,9 @@ const MacroeconomiaV2 = () => {
         contextType={insightSource?.contextType ?? "country-profile"}
         contextKey={insightSource?.contextKey ?? `macro:${selectedCountries.join("|")}`}
         countries={selectedCountries}
+        globeRef={globeRef}
+        globeFocus={globeFocus}
+        targetCountry={mascotTargetCountry}
       />
       {/* PROFILE */}
       

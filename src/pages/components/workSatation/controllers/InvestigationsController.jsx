@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../../../apiUrl.js";
 // import axios from "axios";
 
 // // Controller for managing investigations
@@ -37,7 +38,7 @@
 //       startDate, // should be in YYYY-MM-DD format
 //       endDate,
 //     };
-//     const investigationSent  = await axios.post(`http://localhost:5000/saveInvestigation/`, investigationData);
+//     const investigationSent  = await axios.post(`${BACKEND_URL}/saveInvestigation/`, investigationData);
 //     console.log("Investigation sent:", investigationSent.data);
 //     // Log out the data object for sending
 //     console.log("Investigation data:", investigationData);
@@ -107,7 +108,7 @@ const InvestigationsController = {
     const indepVarsStr = independentVariables.join(",");
     const id = Math.random().toString(36).substring(2, 15); // Generate a random ID
     // Build the Flask route URL (all segments must be URI-encoded)
-    const url = `http://localhost:5000/saveInvestigation/${encodeURIComponent(name)}/${encodeURIComponent(startDate)}/${encodeURIComponent(endDate)}/${encodeURIComponent(depVarsStr)}/${encodeURIComponent(indepVarsStr)}/${encodeURIComponent(id)}`;
+    const url = `${BACKEND_URL}/saveInvestigation/${encodeURIComponent(name)}/${encodeURIComponent(startDate)}/${encodeURIComponent(endDate)}/${encodeURIComponent(depVarsStr)}/${encodeURIComponent(indepVarsStr)}/${encodeURIComponent(id)}`;
 
     try {
       const response = await axios.get(url);

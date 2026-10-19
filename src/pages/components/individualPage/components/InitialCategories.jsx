@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import '../../../../styles/InitialCategories.scss'
+import propsInfoData from '../../../../variable/fetches/propsInfo.json';
 const initialCategories = ({ selectedProd, ...propsInfo }) => {
 const [itemsSelected,selectItem] = useState(null)
 let {merchCategories} = propsInfo
@@ -85,8 +85,7 @@ useEffect(() => {
         }
        }else{
         while(merchCategories === null){
-          const res = await axios.get('../../src/variable/fetches/propsInfo.json').then((data) => data.data);
-          const ss = await res.find(obj => obj['link'] === selectedProd);
+          const ss = propsInfoData.find(obj => obj['link'] === selectedProd);
           const merchC = ss.merchCategories
           merchCategories = merchC
           try {

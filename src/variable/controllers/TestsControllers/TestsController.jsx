@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../../apiUrl.js";
 import React from "react";
 import axios from "axios";
 import HomeGraphs from "../HomeControllers/HomeGraphs";
@@ -10,7 +11,7 @@ const TestsController = {
       if (typeof(ticker) !== 'string'){
        for(let i = 0; i<ticker.length;i++){
         const autoCorrelationTest = await axios.get(
-          `http://localhost:5000/autoCorrelationTest/${ticker[i]}/${startDate}/${endDate}`
+          `${BACKEND_URL}/autoCorrelationTest/${ticker[i]}/${startDate}/${endDate}`
         );
         // for (var i in autoCorrelationTest.data){
         //   const colDivisionKey = document.createElement('div')
@@ -31,7 +32,7 @@ const TestsController = {
        }
       }else{
         const autoCorrelationTest = await axios.get(
-          `http://localhost:5000/autoCorrelationTest/${ticker}/${startDate}/${endDate}`
+          `${BACKEND_URL}/autoCorrelationTest/${ticker}/${startDate}/${endDate}`
         );
         console.log(autoCorrelationTest)
         // for (var i in autoCorrelationTest.data){
@@ -61,7 +62,7 @@ const TestsController = {
         const endDate   = document.getElementById("endDate").value;
       
         const resp = await axios.get(
-          `http://localhost:5000/calculateBasicStats/${ticker}/${startDate}/${endDate}`
+          `${BACKEND_URL}/calculateBasicStats/${ticker}/${startDate}/${endDate}`
         );
 
       
@@ -109,7 +110,7 @@ const TestsController = {
         const startDate = document.getElementById("startDate").value;
         const endDate = document.getElementById("endDate").value;
         const heteroskedasticityTests = await axios.get(
-          `http://localhost:5000/heteroskedasticityTests/${ticker}/${startDate}/${endDate}`
+          `${BACKEND_URL}/heteroskedasticityTests/${ticker}/${startDate}/${endDate}`
         );
         const heteroskedasticityTestsDiv = document.createElement('div');
         heteroskedasticityTestsDiv.classList.add('row')
@@ -136,7 +137,7 @@ const TestsController = {
         const startDate  = document.getElementById("startDate").value;
         const endDate    = document.getElementById("endDate").value;
         const response   = await axios.get(
-          `http://localhost:5000/ST/${ticker}/${startDate}/${endDate}`
+          `${BACKEND_URL}/ST/${ticker}/${startDate}/${endDate}`
         );
         const data       = response.data;  // { ADF:…, DFGLS: […], Phillips-Perron: {…} }
       
@@ -189,18 +190,18 @@ const TestsController = {
             autoCorrelation: null
           }
           const basic = await axios.get(
-          `http://localhost:5000/calculateBasicStats/${ticker}/${startDate}/${endDate}`
+          `${BACKEND_URL}/calculateBasicStats/${ticker}/${startDate}/${endDate}`
         );
           results.basicStatistics = basic.data.basicStats
           const heteroskedasticity =await axios.get(
-          `http://localhost:5000/heteroskedasticityTests/${ticker}/${startDate}/${endDate}`
+          `${BACKEND_URL}/heteroskedasticityTests/${ticker}/${startDate}/${endDate}`
         );
           results.heteroskedasticity= heteroskedasticity.data
    
        
 
         const autoCorrelation = await axios.get(
-          `http://localhost:5000/autoCorrelationTest/${ticker}/${startDate}/${endDate}`
+          `${BACKEND_URL}/autoCorrelationTest/${ticker}/${startDate}/${endDate}`
         );
       results.autoCorrelation = autoCorrelation.data
          //transform all data to plain text
@@ -221,7 +222,7 @@ ${JSON.stringify(results.autoCorrelation, null, 2)}
           //save results for ticker results to send to AI
 
 
-        //  const response = await axios.post(`http://localhost:5000/ai-interpret/${plainTextResults}`)
+        //  const response = await axios.post(`${BACKEND_URL}/ai-interpret/${plainTextResults}`)
         //   console.log(response.data)
         // Send results to AI and display reply
     const aiResponseDiv = document.createElement('div');
@@ -229,7 +230,7 @@ ${JSON.stringify(results.autoCorrelation, null, 2)}
     const paragraph = document.createElement('p');
 
     
-        const response = await axios.post(`http://localhost:5000/ai-interpret/${plainTextResults}`)
+        const response = await axios.post(`${BACKEND_URL}/ai-interpret/${plainTextResults}`)
         paragraph.innerText = response.data.reply;
     aiResponseDiv.appendChild(paragraph);
 
@@ -254,7 +255,7 @@ ${JSON.stringify(results.autoCorrelation, null, 2)}
         const startDate = document.getElementById('startDate').value  
         const endDate = document.getElementById('endDate').value
         const ARIMA = await axios.post(
-          `http://localhost:5000/ARIMA/${ticker}/${startDate}/${endDate}`
+          `${BACKEND_URL}/ARIMA/${ticker}/${startDate}/${endDate}`
         );
         const ARIMADiv = document.createElement('div')
         ARIMADiv.classList.add('row')
@@ -318,7 +319,7 @@ along with any external factors that could be influencing this trend
 
 `;
     
-        const response = await axios.post(`http://localhost:5000/ai-interpret/${plainTextResults}`)
+        const response = await axios.post(`${BACKEND_URL}/ai-interpret/${plainTextResults}`)
         paragraph.innerText = response.data.reply;
     aiResponseDiv.appendChild(paragraph);
 
@@ -341,7 +342,7 @@ along with any external factors that could be influencing this trend
         const startDate  = document.getElementById("startDate").value;
         const endDate    = document.getElementById("endDate").value;
         const response   = await axios.get(
-          `http://localhost:5000/ARIMA/${ticker}/${startDate}/${endDate}`
+          `${BACKEND_URL}/ARIMA/${ticker}/${startDate}/${endDate}`
         );
         const data       = response.data;
         

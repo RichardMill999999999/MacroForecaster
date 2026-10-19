@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../apiUrl.js";
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import CountryAnalysisText from './Macroeconomia/Explorers/CountryAnalysisText';
@@ -68,7 +69,7 @@ export default function AIChatPanel({
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/AI/contextChat', {
+      const response = await fetch(`${BACKEND_URL}/AI/contextChat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

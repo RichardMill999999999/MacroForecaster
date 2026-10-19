@@ -1,8 +1,8 @@
+import { BACKEND_URL } from "../../../apiUrl.js";
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import "./ArticleAIAnalysis.css";
 
-const BACKEND_URL = "http://localhost:5000";
 
 export default function ArticleAIAnalysis({ article, subject }) {
   const [loading, setLoading] = useState(false);

@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../../../apiUrl.js";
 import React, { useState } from 'react';
 import axios from 'axios';
 
@@ -10,7 +11,7 @@ export default function AIChat({ testResults }) {
         const endDate = document.getElementById("endDate").value;
     
     // Send to AI backend
-    const response = await axios.post(`http://localhost:5000/ai-interpret/`, {
+    const response = await axios.post(`${BACKEND_URL}/ai-interpret/`, {
      
       testResults
     });

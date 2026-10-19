@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../../apiUrl.js";
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
@@ -12,12 +13,12 @@ const SavedInvestigationsRouter = () => {
     const fetchInvestigation = async () => {
       try {
         // Fetch single investigation by ID
-        const response = await axios.get(`http://localhost:5000/getInvestigation/${invId}`);
+        const response = await axios.get(`${BACKEND_URL}/getInvestigation/${invId}`);
         setInvestigation(response.data);
       } catch (err) {
         // Fallback: fetch all and filter
         try {
-          const all = await axios.get('http://localhost:5000/getInvestigations');
+          const all = await axios.get(`${BACKEND_URL}/getInvestigations`);
           const found = all.data.find(item => item._id === invId || item.id === invId);
           setInvestigation(found || null);
         } catch (innerErr) {

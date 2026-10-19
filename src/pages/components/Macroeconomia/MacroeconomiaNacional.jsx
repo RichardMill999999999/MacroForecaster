@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../../apiUrl.js";
 
 // import React, { useEffect, useState } from 'react';
 // import L from 'leaflet';  // Ensure you import Leaflet
@@ -10,7 +11,7 @@
 //   const [selectedSeries, setSelectedSeries] = useState('')
 //   const obtainIndicatorsList = async ()=>{
 //     const response = await  axios.get(
-//       "http://localhost:5000/Macroeconomics/Listing"
+//       `${BACKEND_URL}/Macroeconomics/Listing`
 //     ).then(response => {return (response.data)} )
     
 //   const indicatorsList = document.getElementById('listIndicatorsCategories');
@@ -106,7 +107,7 @@
 
 //   // 1️⃣ Fetch category listing
 //   const response = await axios
-//     .get(`http://localhost:5000/Macroeconomics/obtainCategoryListing/${categoryId}`)
+//     .get(`${BACKEND_URL}/Macroeconomics/obtainCategoryListing/${categoryId}`)
 //     .then(res => res.data);
 
 //   const listForEachCategory = document.getElementById('listForEachCategory');
@@ -154,7 +155,7 @@
 //       // 4️⃣ Fetch indicator data for that country
 //       const indicatorResponse = await axios
 //         .get(
-//           `http://localhost:5000/Macroeconomics/IndicatorData/${indicator.id}/${CountryIdName}?per_page=1000`
+//           `${BACKEND_URL}/Macroeconomics/IndicatorData/${indicator.id}/${CountryIdName}?per_page=1000`
 //         )
 //         .then(res => res.data);
 
@@ -175,7 +176,7 @@
 //   // 1. Fetch data (simplified with await and destructuring)
 //   console.log('run');
 //  const response = await axios.get(
-//   "http://localhost:5000/Macroeconomics/Categories"
+//   `${BACKEND_URL}/Macroeconomics/Categories`
 // );
 
 // const data = response.data; // FIX
@@ -271,6 +272,7 @@ import React, { useEffect, useState } from 'react';
 import L from 'leaflet';
 import axios from 'axios';
 import HomeGraphs from '../../../variable/controllers/HomeControllers/HomeGraphs';
+import geoData from '../../../variable/assets/videos/countries.geo.json';
 
 const MacroeconomiaNacional = () => {
   // Extract Country Name from URL
@@ -287,18 +289,14 @@ const MacroeconomiaNacional = () => {
     const map = L.map('countryMap').setView([0, 0], 2);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    fetch('../../../src/variable/assets/videos/countries.geo.json')
-      .then(res => res.json())
-      .then(geojsonData => {
-        const feature = geojsonData.features.find(f => 
-          f.properties.name.toLowerCase() === countryName.toLowerCase()
-        );
-        if (feature) {
-          const bounds = L.geoJSON(feature).getBounds();
-          map.fitBounds(bounds);
-          L.geoJSON(feature, { style: { color: '#0b203f', weight: 2, fillOpacity: 0.1 } }).addTo(map);
-        }
-      });
+    const feature = geoData.features.find(f =>
+      f.properties.name.toLowerCase() === countryName.toLowerCase()
+    );
+    if (feature) {
+      const bounds = L.geoJSON(feature).getBounds();
+      map.fitBounds(bounds);
+      L.geoJSON(feature, { style: { color: '#0b203f', weight: 2, fillOpacity: 0.1 } }).addTo(map);
+    }
 
     return () => map.remove(); // Cleanup map on unmount
   }, [countryName]);
@@ -307,7 +305,7 @@ const MacroeconomiaNacional = () => {
   useEffect(() => {
     const getCats = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/Macroeconomics/Categories");
+        const res = await axios.get(`${BACKEND_URL}/Macroeconomics/Categories`);
         const valuableIds = [1, 3, 5, 7, 11, 12, 13, 14, 20, 21];
         const filtered = res.data[1].filter(cat => valuableIds.includes(parseInt(cat.id)));
         setCategories(filtered);
@@ -318,7 +316,7 @@ const MacroeconomiaNacional = () => {
 
   // 3. Fetch Indicators for a Category
   const handleCategoryClick = async (id) => {
-    const res = await axios.get(`http://localhost:5000/Macroeconomics/obtainCategoryListing/${id}`);
+    const res = await axios.get(`${BACKEND_URL}/Macroeconomics/obtainCategoryListing/${id}`);
     setIndicators(res.data[1] || []);
   };
 

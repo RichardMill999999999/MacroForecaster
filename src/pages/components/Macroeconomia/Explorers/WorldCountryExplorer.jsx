@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../../../apiUrl.js";
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import {
@@ -12,7 +13,6 @@ import {
 import CountryNews from './CountryNews';
 import CountryAnalysisText from './CountryAnalysisText';
 
-const BACKEND_URL = 'http://localhost:5000';
 const WORLD_BANK_URL = 'https://api.worldbank.org/v2';
 const COUNTRY_AI_ENDPOINT = `${BACKEND_URL}/AI/analyzeCountry`;
 
@@ -272,13 +272,14 @@ export default function WorldCountryExplorer({ countryName, onChatContextChange 
       unit: item.unit,
       year: item.year,
       changeVsPreviousObservationPct: item.change,
+      recentObservations: (item.series || []).slice(-30),
       loading: item.loading,
       error: item.error ? item.errorMessage : null,
     })),
     selectedIndicator: selectedIndicator ? {
       name: selectedIndicator.label,
       unit: selectedIndicator.unit,
-      observations: (selectedIndicator.series || []).slice(-40),
+      observations: (selectedIndicator.series || []).slice(-60),
     } : null,
     relatedNews: newsItems.map((item) => ({
       title: item.title,

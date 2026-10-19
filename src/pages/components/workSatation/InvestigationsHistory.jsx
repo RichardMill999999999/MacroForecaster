@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../../apiUrl.js";
 
 import React, { useState, useEffect } from 'react'
 import axios from 'axios'
@@ -11,7 +12,7 @@ const InvestigationsHistory = () => {
   useEffect(() => {
     const fetchInvestigationsHistory = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/getInvestigations')
+        const response = await axios.get(`${BACKEND_URL}/getInvestigations`)
         setInvestigationsHistory(response.data)
       } catch (error) {
         setError(error)

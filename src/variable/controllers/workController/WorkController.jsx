@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../../apiUrl.js";
 import React from "react";
 import axios from "axios";
 import TestsController from "../TestsControllers/TestsController";
@@ -96,7 +97,7 @@ const WorkController = {
                 if (searchValue !== "") {
                     const startDate = document.getElementById("startDate").value;
                     const endDate = document.getElementById("endDate").value;
-                    const data = await axios.get(`http://localhost:5000/getData/${searchValue}/${startDate}/${endDate}`);
+                    const data = await axios.get(`${BACKEND_URL}/getData/${searchValue}/${startDate}/${endDate}`);
         
                     let tempArray = [];
                     let dates = [];

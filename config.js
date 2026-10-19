@@ -1,4 +1,7 @@
-export const BACKEND_URL = "http://localhost:5000";
+const configuredBackendUrl = import.meta.env.VITE_BACKEND_URL?.trim();
+export const BACKEND_URL = (
+    configuredBackendUrl || (import.meta.env.DEV ? "http://localhost:5000" : "")
+).replace(/\/+$/, "");
 export const BENCHMARK = "SPY";
 export const TRADING_DAYS = 252;
 export const MAX_HORIZON = 360;

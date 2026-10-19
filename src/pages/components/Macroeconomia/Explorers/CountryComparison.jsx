@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../../../apiUrl.js";
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import {
@@ -13,7 +14,6 @@ import {
 import CountryAnalysisText from './CountryAnalysisText';
 import './CountryComparison.css';
 
-const BACKEND_URL = 'http://localhost:5000';
 const COLORS = ['#167d72', '#3569ad', '#b56827', '#9257a0', '#c34b59', '#5c7480'];
 const countryProfileCache = new Map();
 const countryProfileRequests = new Map();
@@ -290,7 +290,7 @@ export default function CountryComparison({ countryNames, onRemoveCountry, onCha
             key,
             {
               latest: indicator.latest,
-              recentObservations: (indicator.observations || []).slice(-12),
+              recentObservations: (indicator.observations || []).slice(-30),
             },
           ])
         ),

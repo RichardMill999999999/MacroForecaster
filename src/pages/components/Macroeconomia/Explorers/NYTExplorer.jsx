@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../../../apiUrl.js";
 
 import React, {
   useState,
@@ -7,7 +8,6 @@ import React, {
 } from "react";
 import axios from "axios";
 
-const BACKEND_URL = "http://localhost:5000";
 
 const RSS_FEEDS = {
   Home: "HomePage",

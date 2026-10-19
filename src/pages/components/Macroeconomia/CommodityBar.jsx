@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../../apiUrl.js";
 // import { useEffect, useState } from "react";
 // import axios from "axios";
 
@@ -15,7 +16,7 @@
 //   useEffect(() => {
 //     const fetchPrices = async () => {
 //       try {
-//         const res = await axios.get("http://localhost:5000/resourcePrices");
+//         const res = await axios.get(`${BACKEND_URL}/resourcePrices`);
 //         setPrices(res.data); // { Gold: 4676.285, Silver: 94.579, ... }
 //       } catch (err) {
 //         console.error("Failed to fetch prices:", err);
@@ -69,7 +70,6 @@ import copperIcon from "../../../variable/assets/fotos/copper-icon.webp";
 import wheatIcon from "../../../variable/assets/fotos/Wheat-icon.webp";
 import ArticleAIAnalysis from "./ArticleAIAnalysis";
 
-const BACKEND_URL = "http://localhost:5000";
 const HISTORY_RANGES = [
   ["1w", "1 week"],
   ["30d", "30 days"],

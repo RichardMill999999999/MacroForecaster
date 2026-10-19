@@ -2,8 +2,8 @@ import InitialCategories from './components/InitialCategories';
 import VariableDisplay from './components/VariableDisplay';
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import axios from 'axios';
 import Banner from './components/Banner'
+import headerNavigation from '../../../variable/fetches/headerNavigation.json';
 
 function CID () {
         const location = useLocation();
@@ -11,13 +11,8 @@ function CID () {
 
     useEffect(() => {
         const fetchPropsInfo = async () => {
-            const res = await axios.get('../../src/variable/fetches/headerNavigation.json').then((data) => data.data);
-            const ss = await res.find(obj => obj['link'] === location.search);
+            const ss = headerNavigation.find(obj => obj['link'] === location.search);
             setPropsInfo(ss);
-            const NFLAPI = await axios.get('../../src/variable/fetches/NFLAPI.json').then((data) => data.data);
-            // const app =await axios.get(`${NFLAPI[0].enlace}${team}?key=1e603d3c5bbc4eb8b2285df9c6605c46`).then((data) => data.data);
-            // console.log(app);
-            
         };
         fetchPropsInfo();
     }, [location.search]);

@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../../apiUrl.js";
 import React from "react";
 import axios, { all } from "axios";
 import { useState } from "react";
@@ -17,7 +18,7 @@ const HomeController =  {
       const endDate = document.getElementById("endDate").value;
   
       const data = await axios.get(
-        `http://localhost:5000/getData/${searchValue}/${startDate}/${endDate}`
+        `${BACKEND_URL}/getData/${searchValue}/${startDate}/${endDate}`
       );
       localStorage.setItem('IndividualTicker',data.data.ticker)
 
@@ -178,7 +179,7 @@ const HomeController =  {
         if (searchValue !== "") {
             const startDate = document.getElementById("startDate").value;
             const endDate = document.getElementById("endDate").value;
-            const data = await axios.get(`http://localhost:5000/getData/${searchValue}/${startDate}/${endDate}`);
+            const data = await axios.get(`${BACKEND_URL}/getData/${searchValue}/${startDate}/${endDate}`);
 
             let tempArray = [];
             let dates = [];
@@ -223,7 +224,7 @@ const HomeController =  {
                 try {
                     timeSeries['timestamps'] = timestamps;
                     console.log(timeSeries);
-                    await axios.post('http://localhost:5000/history/saveData', timeSeries, {
+                    await axios.post(`${BACKEND_URL}/history/saveData`, timeSeries, {
                         headers: {
                             'Content-Type': 'application/json'
                         }
@@ -243,11 +244,11 @@ const HomeController =  {
     let tickers = {}
     if (marketType !== ''){
        tickers = await axios.get(
-        `http://localhost:5000/getTickersByTypes/us/stock/${searchValue}/${marketType}`
+        `${BACKEND_URL}/getTickersByTypes/us/stock/${searchValue}/${marketType}`
       );
     }else{
        tickers = await axios.get(
-        `http://localhost:5000/getTickers/${searchValue}`
+        `${BACKEND_URL}/getTickers/${searchValue}`
       );
     }
     const subCategorySelector = document.getElementById("subCategorySelector");

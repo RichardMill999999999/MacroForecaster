@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../../apiUrl.js";
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { NavLink } from "react-router-dom";
@@ -10,7 +11,7 @@ const TimeSeriesHistory = () => {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const response = await axios.get("http://localhost:5000/history/getHistory");
+        const response = await axios.get(`${BACKEND_URL}/history/getHistory`);
         setHistoryData(response.data);
       } catch (err) {
         setError(err);

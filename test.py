@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request
 import pandas as pd
 import numpy as np
 import json
-import InvestmentFinanceAPI from serverFolder
+from serverFolder import InvestmentFinanceAPI
 app = Flask(__name__)
 
 # Mocked or imported API wrapper based on your snippet

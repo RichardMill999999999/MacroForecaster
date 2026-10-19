@@ -157,7 +157,7 @@
   top: 178px;
   left: 18px;
   min-width: 300px;
-  max-width: min(900px, calc(100vw - 36px));
+  max-width: min(900px, calc(45vw - 10px), calc(100vw - 36px));
   height: min(calc(100vh - 198px), 820px);
   resize: both;
   overflow: auto;
@@ -191,8 +191,8 @@
 
 .macro-country-comparison-panel {
   top: 178px;
-  width: min(680px, calc(55vw - 12px));
-  max-width: calc(100vw - 36px);
+  width: min(680px, calc(45vw - 10px));
+  max-width: min(calc(45vw - 10px), calc(100vw - 36px));
   height: min(calc(100vh - 198px), 820px);
 }
 

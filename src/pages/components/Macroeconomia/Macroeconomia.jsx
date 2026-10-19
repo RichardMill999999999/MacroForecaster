@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import L from "leaflet";  // Ensure you import Leaflet
 import axios from "axios";
+import geojsonData from "../../../variable/assets/videos/countries.geo.json";
 const Macroeconomia = () => {
   const [countries, setCountries] = useState([]); // Store the country names
 
@@ -17,12 +18,8 @@ const Macroeconomia = () => {
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
     
-    // Fetch GeoJSON data
-    fetch('../../../src/variable/assets/videos/countries.geo.json')
-      .then(response => response.json())
-      .then(geojsonData => {
-        // Add countryData to map with correct GeoJSON structure
-        L.geoJSON(geojsonData, {
+    // Add countryData to map with correct GeoJSON structure
+    L.geoJSON(geojsonData, {
           style: function (feature) {
             return {
               color: '#ffffff',
@@ -44,14 +41,11 @@ const Macroeconomia = () => {
    
             });
           },
-        }).addTo(map);
+    }).addTo(map);
   
-        // Extract country names and update state
-        const countryNames = geojsonData.features.map((feature) => feature.properties.name);
-        setCountries(countryNames);
-        
-      })
-      .catch(error => console.error('Error loading the GeoJSON data:', error));
+    // Extract country names and update state
+    const countryNames = geojsonData.features.map((feature) => feature.properties.name);
+    setCountries(countryNames);
 
 
 

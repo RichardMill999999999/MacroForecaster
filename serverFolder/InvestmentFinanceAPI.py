@@ -51,15 +51,15 @@ def stockGeneralInfo(name):
      return responseN1['results'][0]
 
 def DailyClosingValuesByName(name,startDate,endDate):
-   
-
     URL = f'https://api.polygon.io/v2/aggs/ticker/{name}/range/1/day/{startDate}/{endDate}?adjusted=true&sort=asc&apiKey={os.getenv("POLYGON_API_KEY", "")}'
-    res = requests.get(URL)
-    # results = res.json()
-    # actualRes = []
-    # for result in results['results']:
-    #     actualRes.append(result['c'])
-    return  res.json()   
+    res = requests.get(URL, timeout=15)
+    res.raise_for_status()
+    payload = res.json()
+    if not isinstance(payload, dict):
+        raise ValueError("Polygon returned an invalid historical-price response.")
+    if payload.get("status") == "ERROR" or payload.get("error"):
+        raise ValueError("Polygon rejected the historical-price request.")
+    return payload
 def closingValuesArray(name,startDate,endDate):
 
         URL = f'https://api.polygon.io/v2/aggs/ticker/{name}/range/1/day/{startDate}/{endDate}?adjusted=true&sort=asc&apiKey={os.getenv("POLYGON_API_KEY", "")}'

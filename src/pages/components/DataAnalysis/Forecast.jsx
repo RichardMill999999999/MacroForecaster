@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../../apiUrl.js";
 
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -8,8 +9,10 @@ import {
     Line,
     AreaChart,
     Area,
+    BarChart,
     ComposedChart,
     Bar,
+    Cell,
     XAxis,
     YAxis,
     Tooltip,
@@ -22,7 +25,6 @@ import {
 /* CONFIG                                                              */
 /* ================================================================== */
 
-const BACKEND_URL = "http://localhost:5000";
 const BENCHMARK = "SPY";
 const TRADING_DAYS = 252;
 const MAX_HORIZON = 360;
@@ -319,6 +321,12 @@ const GLOBAL_CSS = `
 @import url("https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Inter:wght@400;500;600&display=swap");
 #root { max-width: none !important; margin: 0 !important; padding: 0 !important; text-align: left !important; }
 body { display: block !important; place-items: unset !important; margin: 0; background: ${PAPER}; }
+.forecast-overview-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr); gap: 14px; margin-bottom: 20px; }
+.forecast-next-grid { display: grid; grid-template-columns: minmax(260px, 0.75fr) minmax(0, 1.5fr); gap: 18px; align-items: center; margin-bottom: 18px; }
+.forecast-indicator-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
+@media (max-width: 850px) {
+    .forecast-overview-grid, .forecast-next-grid, .forecast-indicator-pair { grid-template-columns: minmax(0, 1fr); }
+}
 `;
 
 const cardBase = {
@@ -495,7 +503,7 @@ const GLOSSARY = {
     fvol: {
         name: "Forecast volatility (annual)",
         what: "The yearly volatility the probability and forecast maths actually use.",
-        how: "Blends implied volatility (60%) with realized volatility (40%) when options data exists, otherwise uses realized alone. Adds a bump when recent volatility is spiking.",
+        how: "Blends the median implied volatility of near-the-money options with realized volatility when usable option IV or quotes exist; otherwise uses realized volatility alone. Adds a bump when recent volatility is spiking.",
         read: (v) =>
             `The model expects a one-standard-deviation yearly move of about ${pct(v, 1)}. Roughly two-thirds of outcomes land within that distance over a year.`,
     },
@@ -771,7 +779,7 @@ const GLOSSARY = {
                 : v < -0.1
                     ? "Options price less movement than recent history: traders expect calm."
                     : "Options roughly match history.",
-        missing: "No options data came back, so the model uses realized volatility alone.",
+        missing: "No usable option quotes or implied-volatility data were available, so the model uses realized volatility alone.",
     },
     recdrift: {
         name: "Recommended drift (annual)",
@@ -798,9 +806,9 @@ const GLOSSARY = {
     impliedvol: {
         name: "Implied volatility",
         what: "The volatility that options prices imply for the coming period.",
-        how: "Read from the first implied-volatility field found in the options data the backend returns.",
+        how: "Median implied volatility from near-the-money contracts with expirations near six weeks, using provider IV when available and otherwise solving Black–Scholes from the latest option quote or trade.",
         read: (v) => `Options traders are pricing roughly ±${pct(v, 0)} a year at one standard deviation.`,
-        missing: "No options data came back for this ticker.",
+        missing: "No usable near-the-money option IV or premium was available to estimate volatility.",
     },
     annret: {
         name: "Annualized log return",
@@ -1420,31 +1428,6 @@ const extractOBI = (json) => {
     return null;
 };
 
-const findIV = (value, depth = 0) => {
-    if (!value || depth > 6) return null;
-    if (Array.isArray(value)) {
-        for (const item of value) {
-            const result = findIV(item, depth + 1);
-            if (result !== null) return result;
-        }
-        return null;
-    }
-    if (typeof value !== "object") return null;
-
-    const keys = ["impliedVolatility", "implied_volatility", "impliedVol", "implied_vol", "iv"];
-    for (const key of keys) {
-        const number = Number(value[key]);
-        if (Number.isFinite(number) && number > 0) {
-            return number > 1 ? number / 100 : number;
-        }
-    }
-    for (const key of Object.keys(value)) {
-        const result = findIV(value[key], depth + 1);
-        if (result !== null) return result;
-    }
-    return null;
-};
-
 const extractVolumeBars = (json) => {
     const bars = json?.results ?? json?.bars ?? json?.data;
     if (!Array.isArray(bars)) return [];
@@ -1518,7 +1501,8 @@ const impliedVolFromPrice = (premium, spot, strike, days, rate, right) => {
     if (!(premium > 0) || !(spot > 0) || !(strike > 0) || !(days > 0)) return null;
     const years = days / 365;
     const intrinsic = right === "C" ? Math.max(spot - strike, 0) : Math.max(strike - spot, 0);
-    if (premium <= intrinsic) return null;
+    const upperBound = right === "C" ? spot : strike * Math.exp(-rate * years);
+    if (premium <= intrinsic || premium >= upperBound) return null;
 
     let low = 0.001;
     let high = 5;
@@ -1531,7 +1515,46 @@ const impliedVolFromPrice = (premium, spot, strike, days, rate, right) => {
     return (low + high) / 2;
 };
 
-const buildOptionRows = (options, metrics, horizon, rate, positions) => {
+const findIV = (optionsData, spot, rate) => {
+    if (!Number.isFinite(spot) || spot <= 0) return null;
+
+    const candidates = (optionsData?.options ?? [])
+        .map((option) => {
+            const contract = parseOptionContract(option.symbol);
+            if (!contract || contract.daysToExpiry < 7) return null;
+
+            const rawIv = Number(option.greeks?.iv);
+            const quotedIv = Number.isFinite(rawIv) && rawIv > 0
+                ? (rawIv > 1 ? rawIv / 100 : rawIv)
+                : null;
+            const mark = optionMark(option);
+            const impliedVol = quotedIv
+                ?? impliedVolFromPrice(mark, spot, contract.strike, contract.daysToExpiry, rate, contract.right);
+            if (!Number.isFinite(impliedVol) || impliedVol <= 0 || impliedVol > 5) return null;
+
+            return {
+                impliedVol,
+                distance: Math.abs(contract.strike / spot - 1),
+                expiryDistance: Math.abs(contract.daysToExpiry - 42),
+            };
+        })
+        .filter(Boolean)
+        .sort((a, b) =>
+            a.distance + a.expiryDistance / 42 * 0.02
+            - (b.distance + b.expiryDistance / 42 * 0.02)
+        )
+        .slice(0, 12)
+        .map((candidate) => candidate.impliedVol)
+        .sort((a, b) => a - b);
+
+    if (!candidates.length) return null;
+    const middle = Math.floor(candidates.length / 2);
+    return candidates.length % 2
+        ? candidates[middle]
+        : (candidates[middle - 1] + candidates[middle]) / 2;
+};
+
+const buildOptionRows = (options, metrics, horizon, rate) => {
     if (!metrics) return [];
     const forecastVol = Math.max(metrics.adaptedVol, 0.0001);
     return (options ?? [])
@@ -1558,11 +1581,6 @@ const buildOptionRows = (options, metrics, horizon, rate, positions) => {
                 volatility,
                 contract.right
             );
-            const position = positions[option.symbol] ?? {};
-            const entryPrice = Number(position.entryPrice);
-            const positionChange = Number.isFinite(entryPrice) && entryPrice > 0 && mark != null
-                ? mark / entryPrice - 1
-                : null;
             const tradeTimestamp = option.trade?.timestamp;
             return {
                 ...option,
@@ -1573,9 +1591,6 @@ const buildOptionRows = (options, metrics, horizon, rate, positions) => {
                 predictedValue,
                 projectedSpot,
                 tradeTimestamp,
-                openedAt: position.openedAt ?? "",
-                entryPrice: position.entryPrice ?? "",
-                positionChange,
             };
         })
         .filter(Boolean)
@@ -1726,7 +1741,7 @@ const buildMetrics = ({ prices, series, optionsData, obi, rfRate, benchPrices })
     const volShock = baselineVol > 0 ? vol5 / baselineVol - 1 : 0;
 
     /* ---- annualized vol blend & options ---- */
-    const impliedVol = findIV(optionsData);
+    const impliedVol = findIV(optionsData, currentPrice, rfRate);
     const longRunVol = stdev(returns.slice(-TRADING_DAYS));
     const annualEwma = ewmaVol * Math.sqrt(TRADING_DAYS);
     const annualLong = longRunVol * Math.sqrt(TRADING_DAYS);
@@ -2537,7 +2552,6 @@ export default function Forecast({ initialTicker = "" }) {
     const [optionsData, setOptionsData] = useState(null);
     const [optionsError, setOptionsError] = useState(null);
     const [marketContext, setMarketContext] = useState(null);
-    const [optionPositions, setOptionPositions] = useState({});
     const [obi, setObi] = useState(0);
     const [obiAvailable, setObiAvailable] = useState(false);
     const [news, setNews] = useState([]);
@@ -2771,9 +2785,24 @@ export default function Forecast({ initialTicker = "" }) {
     }, [metrics, horizon, bandLevel]);
 
     const optionRows = useMemo(
-        () => buildOptionRows(optionsData?.options, metrics, horizon, rfRate, optionPositions),
-        [optionsData, metrics, horizon, rfRate, optionPositions]
+        () => buildOptionRows(optionsData?.options, metrics, horizon, rfRate),
+        [optionsData, metrics, horizon, rfRate]
     );
+    const optionChartRows = useMemo(
+        () => optionRows
+            .filter((option) => option.mark > 0 && Number.isFinite(option.predictedValue))
+            .slice(0, 12)
+            .map((option) => ({
+                symbol: `${option.right === "C" ? "Call" : "Put"} ${money(option.strike)} · ${option.expiration}`,
+                change: (option.predictedValue / option.mark - 1) * 100,
+            })),
+        [optionRows]
+    );
+    const optionAnalysisDate = new Date().toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+    });
 
     const recentVolume = useMemo(() => volumeSummary(volumeBars), [volumeBars]);
 
@@ -3239,7 +3268,7 @@ export default function Forecast({ initialTicker = "" }) {
         >
             <style>{GLOBAL_CSS}</style>
 
-            <div style={{ maxWidth: 1240, margin: "0 auto" }}>
+            <div style={{ maxWidth: 1240, margin: "0 auto", display: "flex", flexDirection: "column" }}>
                 {/* HEADER */}
                 <header
                     style={{
@@ -3461,135 +3490,138 @@ export default function Forecast({ initialTicker = "" }) {
                     </div>
                 )}
 
-                {optionsError && (
-                    <div
-                        role="status"
-                        style={{
-                            marginBottom: 20,
-                            padding: "10px 14px",
-                            background: "#fff",
-                            border: `1px solid ${LINE}`,
-                            borderRadius: 12,
-                            color: MUTED,
-                            fontSize: 12,
-                        }}
-                    >
-                        Options chain: {optionsError}
-                    </div>
-                )}
-
-                {optionsData?.options?.length > 0 && optionRows.length === 0 && (
-                    <div role="status" style={{ marginBottom: 20, color: MUTED, fontSize: 12 }}>
-                        The provider returned option snapshots, but their symbols could not be decoded as standard listed contracts.
-                    </div>
-                )}
-
-                {optionRows.length > 0 && (
-                    <Card style={{ marginBottom: 20 }}>
-                        <SectionHeader
-                            title={`Options: calls, puts, expiry and scenario value — ${activeTicker}`}
-                            subtitle={`Nearest-to-the-money listed contracts. The model value is an estimated option price at day ${horizon}, using the stock's forecast median and Black–Scholes (no dividends or early exercise).`}
-                            right={<Pill tone="neutral">{optionsData.count ?? optionsData.options.length} contracts</Pill>}
-                        />
-                        <p style={{ margin: "0 0 12px", color: MUTED, fontSize: 12, lineHeight: 1.55 }}>
-                            CALL = right to buy at the strike; PUT = right to sell. Enter your actual opening date and premium to see your change since entry; Alpaca's public market feed does not expose your brokerage position or personal open date. If provider IV/Greeks are missing, the model estimates IV from the quote or falls back to forecast volatility.
-                        </p>
-                        <div style={{ overflowX: "auto" }}>
-                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 1050 }}>
-                                <thead>
-                                    <tr>
-                                        {["Option / strike", "Expiration", "Last trade", "Bid / ask", "IV / delta", `Model value · day ${horizon}`, "Your position"].map((label) => (
-                                            <th key={label} style={{ padding: "9px 10px", borderBottom: `1px solid ${LINE}`, color: MUTED, textAlign: "left", whiteSpace: "nowrap" }}>
-                                                {label}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {optionRows.map((option) => {
-                                        const formatOptionValue = (value) =>
-                                            value == null || !Number.isFinite(Number(value)) ? "—" : `$${Number(value).toFixed(2)}`;
-                                        const tradeTime = Date.parse(option.tradeTimestamp);
-                                        const predictedChange = option.mark > 0 ? option.predictedValue / option.mark - 1 : null;
-                                        return (
-                                            <tr key={option.symbol} style={{ borderBottom: `1px solid ${LINE}` }}>
-                                                <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
-                                                    <div style={{ color: option.right === "C" ? TONE.bull : TONE.bear, fontWeight: 700 }}>
-                                                        {option.type.toUpperCase()} · {money(option.strike)}
-                                                    </div>
-                                                    <div style={{ marginTop: 3, color: MUTED, fontSize: 10 }}>{option.symbol}</div>
-                                                </td>
-                                                <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
-                                                    {option.expiration}<div style={{ marginTop: 3, color: MUTED }}>{option.daysToExpiry} calendar days left</div>
-                                                </td>
-                                                <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
-                                                    {formatOptionValue(option.trade?.price)}
-                                                    <div style={{ marginTop: 3, color: MUTED, fontSize: 10 }}>
-                                                        {Number.isFinite(tradeTime) ? new Date(tradeTime).toLocaleString() : "Trade time unavailable"}
-                                                    </div>
-                                                </td>
-                                                <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
-                                                    {formatOptionValue(option.quote?.bidPrice)} / {formatOptionValue(option.quote?.askPrice)}
-                                                </td>
-                                                <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
-                                                    {option.marketIv == null ? "—" : `${(option.marketIv * 100).toFixed(1)}%`}
-                                                    <div style={{ marginTop: 3, color: MUTED }}>Δ {Number.isFinite(Number(option.greeks?.delta)) ? Number(option.greeks.delta).toFixed(2) : "—"}</div>
-                                                </td>
-                                                <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
-                                                    <strong>{formatOptionValue(option.predictedValue)}</strong>
-                                                    <div style={{ marginTop: 3, color: predictedChange == null ? MUTED : predictedChange >= 0 ? TONE.bull : TONE.bear }}>
-                                                        {movePct(predictedChange)} vs current mark
-                                                    </div>
-                                                    <div style={{ marginTop: 3, color: MUTED, fontSize: 10 }}>{option.volatilitySource}</div>
-                                                </td>
-                                                <td style={{ padding: "10px", minWidth: 185 }}>
-                                                    <div style={{ display: "grid", gap: 5 }}>
-                                                        <input
-                                                            aria-label={`Opening date for ${option.symbol}`}
-                                                            type="date"
-                                                            value={option.openedAt}
-                                                            onChange={(event) => setOptionPositions((previous) => ({
-                                                                ...previous,
-                                                                [option.symbol]: {
-                                                                    ...(previous[option.symbol] ?? {}),
-                                                                    openedAt: event.target.value,
-                                                                },
-                                                            }))}
-                                                            style={{ ...inputStyle, padding: "5px 7px", fontSize: 11 }}
-                                                        />
-                                                        <input
-                                                            aria-label={`Entry premium for ${option.symbol}`}
-                                                            type="number"
-                                                            min="0"
-                                                            step="0.01"
-                                                            placeholder="Entry premium ($)"
-                                                            value={option.entryPrice}
-                                                            onChange={(event) => setOptionPositions((previous) => ({
-                                                                ...previous,
-                                                                [option.symbol]: {
-                                                                    ...(previous[option.symbol] ?? {}),
-                                                                    entryPrice: event.target.value,
-                                                                },
-                                                            }))}
-                                                            style={{ ...inputStyle, padding: "5px 7px", fontSize: 11 }}
-                                                        />
-                                                        <span style={{
-                                                            color: option.positionChange == null ? MUTED : option.positionChange >= 0 ? TONE.bull : TONE.bear,
-                                                            fontSize: 11,
-                                                            fontWeight: 600,
-                                                        }}>
-                                                            {option.positionChange == null ? "Enter premium for change" : `${movePct(option.positionChange)} since entry`}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                <div style={{ order: 999, width: "100%" }}>
+                    {optionsError && (
+                        <div
+                            role="status"
+                            style={{
+                                marginBottom: 20,
+                                padding: "10px 14px",
+                                background: "#fff",
+                                border: `1px solid ${LINE}`,
+                                borderRadius: 12,
+                                color: MUTED,
+                                fontSize: 12,
+                            }}
+                        >
+                            Options chain: {optionsError}
                         </div>
-                    </Card>
-                )}
+                    )}
+
+                    {optionsData?.options?.length > 0 && optionRows.length === 0 && (
+                        <div role="status" style={{ marginBottom: 20, color: MUTED, fontSize: 12 }}>
+                            The provider returned option snapshots, but their symbols could not be decoded as standard listed contracts.
+                        </div>
+                    )}
+
+                    {optionRows.length > 0 && (
+                        <Card style={{ marginBottom: 20 }}>
+                            <SectionHeader
+                                title={`Options: calls, puts, expiry and scenario value — ${activeTicker}`}
+                                subtitle={`Nearest-to-the-money listed contracts. Analysis date: ${optionAnalysisDate}. The model value is an estimated option price at day ${horizon}, using the stock's forecast median and Black–Scholes (no dividends or early exercise).`}
+                                right={<Pill tone="neutral">{optionsData.count ?? optionsData.options.length} contracts</Pill>}
+                            />
+                            <p style={{ margin: "0 0 12px", color: MUTED, fontSize: 12, lineHeight: 1.55 }}>
+                                CALL = right to buy at the strike; PUT = right to sell. The chart compares each contract's latest available mark with its modeled value at the selected horizon; this is a scenario estimate, not personal position performance. If provider IV/Greeks are missing, the model estimates IV from the quote or falls back to forecast volatility.
+                            </p>
+                            {optionChartRows.length > 0 ? (
+                                <div style={{ marginBottom: 18 }}>
+                                    <SectionHeader
+                                        title="Estimated option value change"
+                                        subtitle={`Modeled percent change from each contract's latest mark to day ${horizon}.`}
+                                    />
+                                    <ChartBox height={Math.max(190, optionChartRows.length * 30 + 56)}>
+                                        <BarChart
+                                            data={optionChartRows}
+                                            layout="vertical"
+                                            margin={{ top: 4, right: 24, left: 8, bottom: 4 }}
+                                        >
+                                            <CartesianGrid strokeDasharray="2 4" stroke={LINE} horizontal={false} />
+                                            <XAxis
+                                                type="number"
+                                                tick={{ fontSize: 10, fill: MUTED }}
+                                                tickFormatter={(value) => `${Number(value).toFixed(0)}%`}
+                                            />
+                                            <YAxis
+                                                type="category"
+                                                dataKey="symbol"
+                                                width={150}
+                                                tick={{ fontSize: 10, fill: MUTED }}
+                                                tickLine={false}
+                                                axisLine={false}
+                                            />
+                                            <ReferenceLine x={0} stroke={FAINT} />
+                                            <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, "Modeled change"]} />
+                                            <Bar dataKey="change" name="Modeled change" radius={[0, 4, 4, 0]}>
+                                                {optionChartRows.map((row) => (
+                                                    <Cell key={row.symbol} fill={row.change >= 0 ? TONE.bull : TONE.bear} />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ChartBox>
+                                </div>
+                            ) : (
+                                <div role="status" style={{ marginBottom: 14, color: MUTED, fontSize: 12 }}>
+                                    Current option marks are unavailable, so a meaningful modeled-change chart cannot be shown.
+                                </div>
+                            )}
+                            <div style={{ overflowX: "auto" }}>
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 850 }}>
+                                    <thead>
+                                        <tr>
+                                            {["Option / strike", "Expiration", "Last trade", "Bid / ask", "IV / delta", `Model value · day ${horizon}`].map((label) => (
+                                                <th key={label} style={{ padding: "9px 10px", borderBottom: `1px solid ${LINE}`, color: MUTED, textAlign: "left", whiteSpace: "nowrap" }}>
+                                                    {label}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {optionRows.map((option) => {
+                                            const formatOptionValue = (value) =>
+                                                value == null || !Number.isFinite(Number(value)) ? "—" : `$${Number(value).toFixed(2)}`;
+                                            const tradeTime = Date.parse(option.tradeTimestamp);
+                                            const predictedChange = option.mark > 0 ? option.predictedValue / option.mark - 1 : null;
+                                            return (
+                                                <tr key={option.symbol} style={{ borderBottom: `1px solid ${LINE}` }}>
+                                                    <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
+                                                        <div style={{ color: option.right === "C" ? TONE.bull : TONE.bear, fontWeight: 700 }}>
+                                                            {option.type.toUpperCase()} · {money(option.strike)}
+                                                        </div>
+                                                        <div style={{ marginTop: 3, color: MUTED, fontSize: 10 }}>{option.symbol}</div>
+                                                    </td>
+                                                    <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
+                                                        {option.expiration}<div style={{ marginTop: 3, color: MUTED }}>{option.daysToExpiry} calendar days left</div>
+                                                    </td>
+                                                    <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
+                                                        {formatOptionValue(option.trade?.price)}
+                                                        <div style={{ marginTop: 3, color: MUTED, fontSize: 10 }}>
+                                                            {Number.isFinite(tradeTime) ? new Date(tradeTime).toLocaleString() : "Trade time unavailable"}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
+                                                        {formatOptionValue(option.quote?.bidPrice)} / {formatOptionValue(option.quote?.askPrice)}
+                                                    </td>
+                                                    <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
+                                                        {option.marketIv == null ? "—" : `${(option.marketIv * 100).toFixed(1)}%`}
+                                                        <div style={{ marginTop: 3, color: MUTED }}>Δ {Number.isFinite(Number(option.greeks?.delta)) ? Number(option.greeks.delta).toFixed(2) : "—"}</div>
+                                                    </td>
+                                                    <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
+                                                        <strong>{formatOptionValue(option.predictedValue)}</strong>
+                                                        <div style={{ marginTop: 3, color: predictedChange == null ? MUTED : predictedChange >= 0 ? TONE.bull : TONE.bear }}>
+                                                            {movePct(predictedChange)} vs current mark
+                                                        </div>
+                                                        <div style={{ marginTop: 3, color: MUTED, fontSize: 10 }}>{option.volatilitySource}</div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </Card>
+                    )}
+                </div>
 
                 {/* SETUP READ + COMMENTARY */}
                 {verdict && levels && (
@@ -3849,25 +3881,72 @@ export default function Forecast({ initialTicker = "" }) {
 
                 {/* CORE METRICS */}
                 {metrics && (
-                    <>
-                    <div style={{ ...grid(180), marginBottom: 12 }}>
-                        {headlineCards.map(([id, label, value, raw]) => (
-                            <Metric key={id} id={id} label={label} value={value} raw={raw} ctx={ctx} />
-                        ))}
-                    </div>
-                    <Card>
-                        <details>
-                            <summary style={{ cursor: "pointer", fontWeight: 600, color: INK, fontSize: 14 }}>
-                                More volatility and momentum metrics ({additionalCoreCards.length})
-                            </summary>
-                            <div style={{ ...grid(180), marginTop: 14 }}>
-                                {additionalCoreCards.map(([id, label, value, raw]) => (
+                    <div className="forecast-overview-grid">
+                        <div>
+                            <div style={{ ...grid(180), marginBottom: 12 }}>
+                                {headlineCards.map(([id, label, value, raw]) => (
                                     <Metric key={id} id={id} label={label} value={value} raw={raw} ctx={ctx} />
                                 ))}
                             </div>
-                        </details>
-                    </Card>
-                    </>
+                            {windowData.length > 0 && (
+                                <Card>
+                                    <SectionHeader
+                                        title="MACD (12, 26, 9)"
+                                        subtitle="A positive histogram means MACD sits above its signal line."
+                                    />
+                                    <ChartBox height={240}>
+                                        <ComposedChart data={windowData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                                            <CartesianGrid strokeDasharray="2 4" stroke={LINE} vertical={false} />
+                                            <XAxis dataKey="day" tick={{ fontSize: 11, fill: MUTED }} tickLine={false} axisLine={{ stroke: LINE }} />
+                                            <YAxis
+                                                tick={{ fontSize: 11, fill: MUTED }}
+                                                tickLine={false}
+                                                axisLine={false}
+                                                tickFormatter={(v) => Number(v).toFixed(1)}
+                                            />
+                                            <Tooltip formatter={(v, name) => [Number(v).toFixed(3), name]} labelFormatter={(v) => `Day ${v}`} />
+                                            <Legend wrapperStyle={{ fontSize: 12 }} />
+                                            <ReferenceLine y={0} stroke={FAINT} />
+                                            <Bar dataKey="histPos" name="Histogram +" stackId="hist" fill="#9fd3b8" />
+                                            <Bar dataKey="histNeg" name="Histogram −" stackId="hist" fill="#e6aaa3" />
+                                            <Line type="monotone" dataKey="macd" name="MACD" stroke={ACCENT} strokeWidth={2} dot={false} />
+                                            <Line type="monotone" dataKey="macdSignal" name="Signal" stroke="#c28a2c" strokeWidth={1.5} dot={false} />
+                                        </ComposedChart>
+                                    </ChartBox>
+                                </Card>
+                            )}
+                        </div>
+                        {windowData.length > 0 && (
+                            <div style={{ display: "grid", gap: 12, alignContent: "start", minWidth: 0 }}>
+                                <Card style={{ padding: 16, marginBottom: 0 }}>
+                                    <SectionHeader title="RSI (14)" subtitle="Above 70 is overbought; below 30 is oversold." />
+                                    <ChartBox height={130}>
+                                        <LineChart data={windowData} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="2 4" stroke={LINE} vertical={false} />
+                                            <XAxis dataKey="day" tick={{ fontSize: 9, fill: MUTED }} tickLine={false} axisLine={{ stroke: LINE }} />
+                                            <YAxis domain={[0, 100]} ticks={[30, 70]} tick={{ fontSize: 9, fill: MUTED }} tickLine={false} axisLine={false} />
+                                            <Tooltip formatter={(v) => Number(v).toFixed(1)} labelFormatter={(v) => `Day ${v}`} />
+                                            <ReferenceLine y={70} stroke={TONE.bear} strokeDasharray="4 4" />
+                                            <ReferenceLine y={30} stroke={TONE.bull} strokeDasharray="4 4" />
+                                            <Line type="monotone" dataKey="rsi" name="RSI" stroke="#7b61c4" strokeWidth={2} dot={false} />
+                                        </LineChart>
+                                    </ChartBox>
+                                </Card>
+                                <Card style={{ padding: 16, marginBottom: 0 }}>
+                                    <SectionHeader title="Drawdown" subtitle="Distance below the previous peak." />
+                                    <ChartBox height={130}>
+                                        <AreaChart data={windowData} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="2 4" stroke={LINE} vertical={false} />
+                                            <XAxis dataKey="day" tick={{ fontSize: 9, fill: MUTED }} tickLine={false} axisLine={{ stroke: LINE }} />
+                                            <YAxis tick={{ fontSize: 9, fill: MUTED }} tickLine={false} axisLine={false} tickFormatter={(v) => `${Number(v).toFixed(0)}%`} />
+                                            <Tooltip formatter={(v) => `${Number(v).toFixed(2)}%`} labelFormatter={(v) => `Day ${v}`} />
+                                            <Area type="monotone" dataKey="drawdown" name="Drawdown" stroke={TONE.bear} fill="#f5dcd8" strokeWidth={1.8} />
+                                        </AreaChart>
+                                    </ChartBox>
+                                </Card>
+                            </div>
+                        )}
+                    </div>
                 )}
 
                 {/* TARGET RESULTS */}
@@ -3941,12 +4020,7 @@ export default function Forecast({ initialTicker = "" }) {
                         <ChartBox height={380}>
                             <LineChart data={windowData} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
                                 <CartesianGrid strokeDasharray="2 4" stroke={LINE} vertical={false} />
-                                <XAxis
-                                    dataKey="day"
-                                    tick={{ fontSize: 11, fill: MUTED }}
-                                    tickLine={false}
-                                    axisLine={{ stroke: LINE }}
-                                />
+                                <XAxis dataKey="day" tick={{ fontSize: 11, fill: MUTED }} tickLine={false} axisLine={{ stroke: LINE }} />
                                 <YAxis
                                     domain={["auto", "auto"]}
                                     tick={{ fontSize: 11, fill: MUTED }}
@@ -3983,70 +4057,71 @@ export default function Forecast({ initialTicker = "" }) {
                             title="Next 30 sessions"
                             subtitle={`Three models project forward from the same history. The consensus is their average. The shaded band is the selected ${bandLevel}% range from the volatility model.`}
                         />
-                        <div style={{ ...grid(180), marginBottom: 18 }}>
-                            <Metric
-                                id="ens"
-                                big
-                                label="Consensus, day 30"
-                                value={money(forecast.ens30)}
-                                raw={forecast.ens30}
-                                ctx={ctx}
-                            />
-                            <Metric
-                                id="band30"
-                                label={`${bandLevel}% range, day 30`}
-                                value={`${money(forecast.gbmLow30)} – ${money(forecast.gbmHigh30)}`}
-                                raw={forecast.band30Sd}
-                                ctx={ctx}
-                            />
-                            <Metric
-                                id="up30"
-                                label="Chance of ending above today"
-                                value={pct(forecast.chanceUp, 0)}
-                                raw={forecast.chanceUp}
-                                ctx={ctx}
-                            />
-                            <Metric
-                                id="spread30"
-                                label="Model disagreement"
-                                value={pct(forecast.spread, 1)}
-                                raw={forecast.spread}
-                                ctx={ctx}
-                            />
+                        <div className="forecast-next-grid">
+                            <div style={{ ...grid(180), alignContent: "start" }}>
+                                <Metric
+                                    id="ens"
+                                    big
+                                    label="Consensus, day 30"
+                                    value={money(forecast.ens30)}
+                                    raw={forecast.ens30}
+                                    ctx={ctx}
+                                />
+                                <Metric
+                                    id="band30"
+                                    label={`${bandLevel}% range, day 30`}
+                                    value={`${money(forecast.gbmLow30)} – ${money(forecast.gbmHigh30)}`}
+                                    raw={forecast.band30Sd}
+                                    ctx={ctx}
+                                />
+                                <Metric
+                                    id="up30"
+                                    label="Chance of ending above today"
+                                    value={pct(forecast.chanceUp, 0)}
+                                    raw={forecast.chanceUp}
+                                    ctx={ctx}
+                                />
+                                <Metric
+                                    id="spread30"
+                                    label="Model disagreement"
+                                    value={pct(forecast.spread, 1)}
+                                    raw={forecast.spread}
+                                    ctx={ctx}
+                                />
+                            </div>
+                            <ChartBox height={320}>
+                                <ComposedChart data={forecast.rows} margin={{ top: 10, right: 16, left: 4, bottom: 6 }}>
+                                    <CartesianGrid strokeDasharray="2 4" stroke={LINE} vertical={false} />
+                                    <XAxis
+                                        dataKey="x"
+                                        tick={{ fontSize: 11, fill: MUTED }}
+                                        tickLine={false}
+                                        axisLine={{ stroke: LINE }}
+                                        minTickGap={24}
+                                        interval="preserveStartEnd"
+                                        tickFormatter={(v) => (v === 0 ? "Today" : v > 0 ? `+${v}` : `${v}`)}
+                                    />
+                                    <YAxis
+                                        domain={["auto", "auto"]}
+                                        tick={{ fontSize: 11, fill: MUTED }}
+                                        tickLine={false}
+                                        axisLine={false}
+                                        width={64}
+                                        tickFormatter={(v) => `$${Number(v).toFixed(0)}`}
+                                    />
+                                    <Tooltip content={<ForecastTip level={bandLevel} />} />
+                                    <Area type="monotone" dataKey="bandBase" stackId="band" stroke="none" fill="transparent" legendType="none" isAnimationActive={false} />
+                                    <Area type="monotone" dataKey="bandWidth" stackId="band" stroke="none" fill={ACCENT} fillOpacity={0.1} name={`${bandLevel}% range`} isAnimationActive={false} />
+                                    <Line type="monotone" dataKey="price" name="Close" stroke={INK} strokeWidth={2} dot={false} isAnimationActive={false} />
+                                    <Line type="monotone" dataKey="ens" name="Consensus" stroke={ACCENT} strokeWidth={2.5} dot={false} isAnimationActive={false} />
+                                    <Line type="monotone" dataKey="ar" name="AR(5)" stroke="#8a6fd1" strokeWidth={1.2} dot={false} isAnimationActive={false} />
+                                    <Line type="monotone" dataKey="holt" name="Damped trend" stroke="#2f7d6b" strokeWidth={1.2} dot={false} isAnimationActive={false} />
+                                    <Line type="monotone" dataKey="gbm" name="GBM" stroke="#b7791f" strokeWidth={1.2} strokeDasharray="4 3" dot={false} isAnimationActive={false} />
+                                    <ReferenceLine x={0} stroke={FAINT} strokeDasharray="3 3" />
+                                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                                </ComposedChart>
+                            </ChartBox>
                         </div>
-
-                        <ChartBox height={320}>
-                            <ComposedChart data={forecast.rows} margin={{ top: 10, right: 16, left: 4, bottom: 6 }}>
-                                <CartesianGrid strokeDasharray="2 4" stroke={LINE} vertical={false} />
-                                <XAxis
-                                    dataKey="x"
-                                    tick={{ fontSize: 11, fill: MUTED }}
-                                    tickLine={false}
-                                    axisLine={{ stroke: LINE }}
-                                    minTickGap={24}
-                                    interval="preserveStartEnd"
-                                    tickFormatter={(v) => (v === 0 ? "Today" : v > 0 ? `+${v}` : `${v}`)}
-                                />
-                                <YAxis
-                                    domain={["auto", "auto"]}
-                                    tick={{ fontSize: 11, fill: MUTED }}
-                                    tickLine={false}
-                                    axisLine={false}
-                                    width={64}
-                                    tickFormatter={(v) => `$${Number(v).toFixed(0)}`}
-                                />
-                                <Tooltip content={<ForecastTip level={bandLevel} />} />
-                                <Area type="monotone" dataKey="bandBase" stackId="band" stroke="none" fill="transparent" legendType="none" isAnimationActive={false} />
-                                <Area type="monotone" dataKey="bandWidth" stackId="band" stroke="none" fill={ACCENT} fillOpacity={0.1} name={`${bandLevel}% range`} isAnimationActive={false} />
-                                <Line type="monotone" dataKey="price" name="Close" stroke={INK} strokeWidth={2} dot={false} isAnimationActive={false} />
-                                <Line type="monotone" dataKey="ens" name="Consensus" stroke={ACCENT} strokeWidth={2.5} dot={false} isAnimationActive={false} />
-                                <Line type="monotone" dataKey="ar" name="AR(5)" stroke="#8a6fd1" strokeWidth={1.2} dot={false} isAnimationActive={false} />
-                                <Line type="monotone" dataKey="holt" name="Damped trend" stroke="#2f7d6b" strokeWidth={1.2} dot={false} isAnimationActive={false} />
-                                <Line type="monotone" dataKey="gbm" name="GBM" stroke="#b7791f" strokeWidth={1.2} strokeDasharray="4 3" dot={false} isAnimationActive={false} />
-                                <ReferenceLine x={0} stroke={FAINT} strokeDasharray="3 3" />
-                                <Legend wrapperStyle={{ fontSize: 12 }} />
-                            </ComposedChart>
-                        </ChartBox>
 
                         <div style={{ overflowX: "auto", marginTop: 18 }}>
                             <table
@@ -4460,79 +4535,9 @@ export default function Forecast({ initialTicker = "" }) {
                     </Card>
                 )}
 
-                {/* RSI & MACD */}
+                {/* ROLLING VOLATILITY & MACD */}
                 {windowData.length > 0 && (
-                    <div style={{ ...grid(420), marginBottom: 20 }}>
-                        <Card style={{ marginBottom: 0 }}>
-                            <SectionHeader title="RSI (14)" subtitle="Above 70 is overbought, below 30 is oversold." />
-                            <ChartBox height={240}>
-                                <LineChart data={windowData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
-                                    <CartesianGrid strokeDasharray="2 4" stroke={LINE} vertical={false} />
-                                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: MUTED }} tickLine={false} axisLine={{ stroke: LINE }} />
-                                    <YAxis
-                                        domain={[0, 100]}
-                                        ticks={[0, 30, 50, 70, 100]}
-                                        tick={{ fontSize: 11, fill: MUTED }}
-                                        tickLine={false}
-                                        axisLine={false}
-                                    />
-                                    <Tooltip formatter={(v) => Number(v).toFixed(1)} labelFormatter={(v) => `Day ${v}`} />
-                                    <ReferenceLine y={70} stroke={TONE.bear} strokeDasharray="4 4" />
-                                    <ReferenceLine y={30} stroke={TONE.bull} strokeDasharray="4 4" />
-                                    <Line type="monotone" dataKey="rsi" name="RSI" stroke="#7b61c4" strokeWidth={2} dot={false} />
-                                </LineChart>
-                            </ChartBox>
-                        </Card>
-
-                        <Card style={{ marginBottom: 0 }}>
-                            <SectionHeader
-                                title="MACD (12, 26, 9)"
-                                subtitle="A positive histogram means MACD sits above its signal line."
-                            />
-                            <ChartBox height={240}>
-                                <ComposedChart data={windowData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
-                                    <CartesianGrid strokeDasharray="2 4" stroke={LINE} vertical={false} />
-                                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: MUTED }} tickLine={false} axisLine={{ stroke: LINE }} />
-                                    <YAxis
-                                        tick={{ fontSize: 11, fill: MUTED }}
-                                        tickLine={false}
-                                        axisLine={false}
-                                        tickFormatter={(v) => Number(v).toFixed(1)}
-                                    />
-                                    <Tooltip formatter={(v, name) => [Number(v).toFixed(3), name]} labelFormatter={(v) => `Day ${v}`} />
-                                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                                    <ReferenceLine y={0} stroke={FAINT} />
-                                    <Bar dataKey="histPos" name="Histogram +" stackId="hist" fill="#9fd3b8" />
-                                    <Bar dataKey="histNeg" name="Histogram −" stackId="hist" fill="#e6aaa3" />
-                                    <Line type="monotone" dataKey="macd" name="MACD" stroke={ACCENT} strokeWidth={2} dot={false} />
-                                    <Line type="monotone" dataKey="macdSignal" name="Signal" stroke="#c28a2c" strokeWidth={1.5} dot={false} />
-                                </ComposedChart>
-                            </ChartBox>
-                        </Card>
-                    </div>
-                )}
-
-                {/* DRAWDOWN & VOLATILITY */}
-                {windowData.length > 0 && (
-                    <div style={{ ...grid(420), marginBottom: 20 }}>
-                        <Card style={{ marginBottom: 0 }}>
-                            <SectionHeader title="Drawdown" subtitle="How far the price sits below its previous peak." />
-                            <ChartBox height={240}>
-                                <AreaChart data={windowData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
-                                    <CartesianGrid strokeDasharray="2 4" stroke={LINE} vertical={false} />
-                                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: MUTED }} tickLine={false} axisLine={{ stroke: LINE }} />
-                                    <YAxis
-                                        tick={{ fontSize: 11, fill: MUTED }}
-                                        tickLine={false}
-                                        axisLine={false}
-                                        tickFormatter={(v) => `${Number(v).toFixed(0)}%`}
-                                    />
-                                    <Tooltip formatter={(v) => `${Number(v).toFixed(2)}%`} labelFormatter={(v) => `Day ${v}`} />
-                                    <Area type="monotone" dataKey="drawdown" name="Drawdown" stroke={TONE.bear} fill="#f5dcd8" strokeWidth={1.8} />
-                                </AreaChart>
-                            </ChartBox>
-                        </Card>
-
+                    <div className="forecast-indicator-pair">
                         <Card style={{ marginBottom: 0 }}>
                             <SectionHeader
                                 title="Rolling 20-day volatility"
@@ -4560,6 +4565,17 @@ export default function Forecast({ initialTicker = "" }) {
                                     <Line type="monotone" dataKey="rollVol" name="20-day vol" stroke="#0891b2" strokeWidth={2} dot={false} />
                                 </LineChart>
                             </ChartBox>
+                        </Card>
+                        <Card style={{ marginBottom: 0 }}>
+                            <SectionHeader
+                                title={`Volatility and momentum metrics`}
+                                subtitle="Additional realized volatility and trend indicators."
+                            />
+                            <div style={grid(150)}>
+                                {additionalCoreCards.map(([id, label, value, raw]) => (
+                                    <Metric key={id} id={id} label={label} value={value} raw={raw} ctx={ctx} />
+                                ))}
+                            </div>
                         </Card>
                     </div>
                 )}

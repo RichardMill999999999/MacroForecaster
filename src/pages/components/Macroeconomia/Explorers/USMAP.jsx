@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../../../apiUrl.js";
 // import React, { useState, useEffect, useMemo } from 'react';
 // import {
 //   LineChart,
@@ -433,7 +434,6 @@ import {
   CartesianGrid,
 } from 'recharts';
 
-const BACKEND_URL = 'http://localhost:5000';
 
 /* =========================================================
    COUNTRY SUMMARY INDICATORS

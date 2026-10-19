@@ -1,8 +1,8 @@
+import { BACKEND_URL } from "../../../../apiUrl.js";
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import ArticleAIAnalysis from '../ArticleAIAnalysis';
 
-const BACKEND_URL = 'http://localhost:5000';
 
 const normalizeArticle = (item) => ({
   title: item?.title || item?.headline?.main || 'Untitled',

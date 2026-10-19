@@ -1,3 +1,4 @@
+import { BACKEND_URL } from "../../../apiUrl.js";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
@@ -13,7 +14,6 @@ import {
 } from "recharts";
 import "./PortfolioLookout.css";
 
-const BACKEND_URL = "http://localhost:5000";
 const STORAGE_KEY = "market-portfolio-lookout-v1";
 const PROFILE_STORAGE_KEY = "market-portfolio-profiles-v1";
 const SESSION_STORAGE_KEY = "market-portfolio-sessions-v1";
@@ -105,14 +105,30 @@ async function fetchHistory(ticker, startDate, endDate) {
   const request = fetch(
     `${BACKEND_URL}/getData/${encodeURIComponent(ticker)}/${startDate}/${endDate}`
   ).then(async (response) => {
-    const body = await response.json();
-    if (!response.ok) throw new Error(body?.error || `Price history failed for ${ticker} (${response.status}).`);
-    const bars = Array.isArray(body?.results)
-      ? body.results
-          .filter((bar) => Number.isFinite(bar?.c) && Number.isFinite(bar?.t))
-          .map((bar) => ({ date: new Date(bar.t).toISOString().slice(0, 10), close: bar.c }))
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body?.error || `Price history failed for ${ticker} (${response.status}).`);
+    }
+    if (body?.status === "ERROR" || body?.error) {
+      throw new Error(body.error || `The price provider rejected the request for ${ticker}.`);
+    }
+
+    const rawBars = body?.results ?? body?.bars ?? body?.data;
+    const bars = Array.isArray(rawBars)
+      ? rawBars.flatMap((bar) => {
+          const close = Number(bar?.c ?? bar?.close ?? bar?.price);
+          const timestamp = bar?.t ?? bar?.timestamp ?? bar?.time ?? bar?.date;
+          if (!Number.isFinite(close) || close <= 0 || timestamp == null || timestamp === "") return [];
+          const timestampNumber = Number(timestamp);
+          const timestampMs = Number.isFinite(timestampNumber) ? timestampNumber : Date.parse(timestamp);
+          if (!Number.isFinite(timestampMs)) return [];
+          return [{ date: new Date(timestampMs).toISOString().slice(0, 10), close }];
+        })
       : [];
-    if (!bars.length) throw new Error(`No historical prices were returned for ${ticker}.`);
+    if (!bars.length) {
+      const providerStatus = body?.status ? ` (provider status: ${body.status})` : "";
+      throw new Error(`No usable historical prices were returned for ${ticker} from ${startDate} to ${endDate}${providerStatus}.`);
+    }
     return bars;
   }).catch((error) => {
     HISTORY_CACHE.delete(cacheKey);
