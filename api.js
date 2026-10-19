@@ -26,18 +26,24 @@ export const searchInstruments = (query, signal) =>
 // One NYT RSS feed through the existing backend route
 export const fetchNyt = (feed, signal) => getJson(`${BACKEND_URL}/NYT/rss/${feed}`, { signal });
 
-// Prices, options, order book and the benchmark, fetched together. Failed pieces come back as null.
+// Prices, live options, quote-level liquidity, and the benchmark, fetched together.
 export const fetchMarketPackage = async (symbol, bench, from, to, signal) => {
     const sym = encodeURIComponent(symbol);
     const b = encodeURIComponent(bench);
     const settled = await Promise.allSettled([
         fetch(`${BACKEND_URL}/getData/${sym}/${from}/${to}`, { signal }),
-        fetch(`${BACKEND_URL}/getOptions/${sym}`, { signal }),
-        fetch(`${BACKEND_URL}/getOrderBook/${sym}?feed=iex`, { signal }),
+        fetch(`${BACKEND_URL}/alpaca/options/${sym}?limit=1000`, { signal }),
+        fetch(`${BACKEND_URL}/market/overview/${sym}?feed=iex`, { signal }),
         fetch(`${BACKEND_URL}/getData/${b}/${from}/${to}`, { signal }),
     ]);
-    const [priceJson, optionsJson, bookJson, benchJson] = await Promise.all(settled.map(readSettled));
-    return { priceJson, optionsJson, bookJson, benchJson };
+    const [priceJson, optionsJson, marketContextJson, benchJson] = await Promise.all(settled.map(readSettled));
+    return {
+        priceJson,
+        optionsJson,
+        bookJson: marketContextJson?.quote ?? null,
+        marketContextJson,
+        benchJson,
+    };
 };
 
 // POST helper for the AI routes. Throws with the backend's message when a call fails.

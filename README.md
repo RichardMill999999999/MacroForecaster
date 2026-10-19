@@ -12,3 +12,11 @@ copied into MongoDB the first time the API returns an empty workspace. Historica
 in the existing `TimeSeriesHistory` database.
 
 Check `http://localhost:5000/health` to see which integrations are configured. Never commit `.env`.
+
+The forecast page uses Polygon daily aggregate bars and reference-company details, plus Alpaca option
+snapshots and the latest stock quote/bar. Its market-context panel shows market capitalization when Polygon
+provides it, session volume/trade counts, candle-direction volume estimates, and quote-level bid/ask sizes.
+Buyer- versus seller-initiated share volume is not inferred from daily bars. The forward forecast defaults
+to 30 trading sessions and the historical chart defaults to two years; the selected 67% confidence range
+is used by both forecast charts. MongoDB connectivity is actively checked by `/health` (`mongoConnected`),
+and Mongo-backed routes return an explicit service error if the database is not configured or reachable.

@@ -29,8 +29,8 @@ const MAX_HORIZON = 360;
 const MC_PATHS = 2000;
 const FORECAST_DAYS = 30;
 const TARGET_MULTIPLIER = 1.05;
-const BAND_LEVELS = [50, 68, 80, 90, 95];
-const zForLevel = (p) => ({ 50: 0.6745, 68: 1.0, 80: 1.2816, 90: 1.6449, 95: 1.96 })[p] ?? 1.2816;
+const BAND_LEVELS = [50, 67, 80, 90, 95];
+const zForLevel = (p) => ({ 50: 0.6745, 67: 0.974, 80: 1.2816, 90: 1.6449, 95: 1.96 })[p] ?? 0.974;
 const HORIZONS = [1, 5, 10, 20, 30, 60, 90, 120, 180, 252, 360];
 const WINDOW_OPTIONS = [30, 90, 180, 360, 730];
 
@@ -398,6 +398,11 @@ const money = (v) => {
         maximumFractionDigits: digits,
     });
 };
+const compactNumber = (v) =>
+    v != null && v !== "" && Number.isFinite(Number(v))
+        ? Number(v).toLocaleString("en-US", { notation: "compact", maximumFractionDigits: 2 })
+        : "—";
+const compactMoney = (v) => (v != null && v !== "" && Number.isFinite(Number(v)) ? `$${compactNumber(Number(v))}` : "—");
 const pct = (v, d = 2) => (Number.isFinite(v) ? `${(v * 100).toFixed(d)}%` : "—");
 const movePct = (v, d = 1) =>
     Number.isFinite(v) ? `${v >= 0 ? "+" : ""}${(v * 100).toFixed(d)}%` : "—";
@@ -549,11 +554,11 @@ const GLOSSARY = {
                 : "The model's central estimate for the day.",
     },
     band: {
-        name: "1σ range at horizon",
+        name: "Confidence range at horizon",
         what: "The band where about two-thirds of simulated outcomes are expected to land.",
-        how: "Median × e^(±σ√T). The edges are multiplicative, so the dollar distance is wider on the upside.",
-        read: (v) =>
-            `Roughly two-thirds of outcomes land inside this band. Its half-width, ${pct(v, 1)}, is the cost of uncertainty over this horizon.`,
+        how: "Median × e^(±zσ√T), where z follows the selected confidence level. The edges are multiplicative, so the dollar distance is wider on the upside.",
+        read: (v, c) =>
+            `About ${Math.round(c?.confidence ?? 67)}% of model outcomes land inside this band. Its half-width, ${pct(v, 1)}, is the cost of uncertainty over this horizon.`,
     },
     support: {
         name: "Support (50-day average)",
@@ -771,7 +776,7 @@ const GLOSSARY = {
     recdrift: {
         name: "Recommended drift (annual)",
         what: "The annual return the model tilts the forecast toward.",
-        how: "Directional score × 10%, capped at ±10% a year.",
+        how: "The risk-free rate plus a directional tilt of up to ±10% a year. Changing the risk-free rate therefore changes projected prices and probabilities as well as risk-adjusted ratios.",
         read: (v) =>
             v > 0
                 ? `The model tilts the forecast up by about ${pct(v, 2)} a year.`
@@ -998,7 +1003,7 @@ const GLOSSARY = {
     band30: {
         name: "Confidence band, day 30",
         what: "The range where the chosen share of simulated outcomes is expected to end.",
-        how: "Median × e^(±z·σ√(30/252)). The z-score depends on the band you pick: 0.67 for 50%, 1.00 for 68%, 1.28 for 80%.",
+        how: "Median × e^(±z·σ√(30/252)). The z-score depends on the selected central confidence level; 67% uses z ≈ 0.974.",
         read: (v) =>
             `This share of simulated outcomes lands inside the band, a spread of about ±${pct(v, 1)} around the median.`,
     },
@@ -1440,6 +1445,149 @@ const findIV = (value, depth = 0) => {
     return null;
 };
 
+const extractVolumeBars = (json) => {
+    const bars = json?.results ?? json?.bars ?? json?.data;
+    if (!Array.isArray(bars)) return [];
+    return bars
+        .map((bar) => ({
+            open: Number(bar?.o ?? bar?.open),
+            close: Number(bar?.c ?? bar?.close),
+            volume: Number(bar?.v ?? bar?.volume),
+        }))
+        .filter((bar) => Number.isFinite(bar.open) && Number.isFinite(bar.close) && Number.isFinite(bar.volume));
+};
+
+const volumeSummary = (bars) => {
+    const recent = bars.slice(-30);
+    return recent.reduce(
+        (summary, bar) => {
+            summary.count += 1;
+            summary.total += bar.volume;
+            if (bar.close > bar.open) summary.up += bar.volume;
+            else if (bar.close < bar.open) summary.down += bar.volume;
+            else summary.flat += bar.volume;
+            return summary;
+        },
+        { count: 0, total: 0, up: 0, down: 0, flat: 0 }
+    );
+};
+
+const parseOptionContract = (symbol) => {
+    const match = String(symbol ?? "").match(/^(.{1,6}?)(\d{2})(\d{2})(\d{2})([CP])(\d{8})$/);
+    if (!match) return null;
+    const [, root, year, month, day, right, strikeValue] = match;
+    const expiration = `${2000 + Number(year)}-${month}-${day}`;
+    const expirationTime = Date.UTC(2000 + Number(year), Number(month) - 1, Number(day));
+    if (
+        new Date(expirationTime).getUTCMonth() !== Number(month) - 1
+        || new Date(expirationTime).getUTCDate() !== Number(day)
+    ) return null;
+    return {
+        underlying: root.trim(),
+        expiration,
+        daysToExpiry: Math.max(0, Math.ceil((expirationTime - Date.now()) / 86400000)),
+        right,
+        type: right === "C" ? "Call" : "Put",
+        strike: Number(strikeValue) / 1000,
+    };
+};
+
+const optionMark = (option) => {
+    const bid = Number(option.quote?.bidPrice);
+    const ask = Number(option.quote?.askPrice);
+    if (Number.isFinite(bid) && Number.isFinite(ask) && bid >= 0 && ask >= bid && ask > 0) {
+        return (bid + ask) / 2;
+    }
+    const trade = Number(option.trade?.price);
+    return Number.isFinite(trade) && trade > 0 ? trade : null;
+};
+
+const blackScholesOptionValue = (spot, strike, years, rate, volatility, right) => {
+    if (!(spot > 0) || !(strike > 0)) return null;
+    if (!(years > 0) || !(volatility > 0)) {
+        return right === "C" ? Math.max(spot - strike, 0) : Math.max(strike - spot, 0);
+    }
+    const sigmaRootTime = volatility * Math.sqrt(years);
+    const d1 = (Math.log(spot / strike) + (rate + volatility * volatility / 2) * years) / sigmaRootTime;
+    const d2 = d1 - sigmaRootTime;
+    if (right === "C") return spot * normalCDF(d1) - strike * Math.exp(-rate * years) * normalCDF(d2);
+    return strike * Math.exp(-rate * years) * normalCDF(-d2) - spot * normalCDF(-d1);
+};
+
+const impliedVolFromPrice = (premium, spot, strike, days, rate, right) => {
+    if (!(premium > 0) || !(spot > 0) || !(strike > 0) || !(days > 0)) return null;
+    const years = days / 365;
+    const intrinsic = right === "C" ? Math.max(spot - strike, 0) : Math.max(strike - spot, 0);
+    if (premium <= intrinsic) return null;
+
+    let low = 0.001;
+    let high = 5;
+    for (let iteration = 0; iteration < 48; iteration++) {
+        const mid = (low + high) / 2;
+        const modelValue = blackScholesOptionValue(spot, strike, years, rate, mid, right);
+        if (modelValue > premium) high = mid;
+        else low = mid;
+    }
+    return (low + high) / 2;
+};
+
+const buildOptionRows = (options, metrics, horizon, rate, positions) => {
+    if (!metrics) return [];
+    const forecastVol = Math.max(metrics.adaptedVol, 0.0001);
+    return (options ?? [])
+        .map((option) => {
+            const contract = parseOptionContract(option.symbol);
+            if (!contract) return null;
+            const mark = optionMark(option);
+            const rawIv = Number(option.greeks?.iv);
+            const marketIv = Number.isFinite(rawIv) && rawIv > 0
+                ? (rawIv > 1 ? rawIv / 100 : rawIv)
+                : impliedVolFromPrice(mark, metrics.currentPrice, contract.strike, contract.daysToExpiry, rate, contract.right);
+            const volatility = marketIv ?? forecastVol;
+            const horizonCalendarDays = horizon * 7 / 5;
+            const projectionDays = Math.min(horizon, Math.ceil(contract.daysToExpiry * 5 / 7));
+            const projectedSpot = metrics.currentPrice * Math.exp(
+                (metrics.adaptedDrift - 0.5 * forecastVol * forecastVol) * projectionDays / TRADING_DAYS
+            );
+            const remainingDays = Math.max(0, contract.daysToExpiry - horizonCalendarDays);
+            const predictedValue = blackScholesOptionValue(
+                projectedSpot,
+                contract.strike,
+                remainingDays / 365,
+                rate,
+                volatility,
+                contract.right
+            );
+            const position = positions[option.symbol] ?? {};
+            const entryPrice = Number(position.entryPrice);
+            const positionChange = Number.isFinite(entryPrice) && entryPrice > 0 && mark != null
+                ? mark / entryPrice - 1
+                : null;
+            const tradeTimestamp = option.trade?.timestamp;
+            return {
+                ...option,
+                ...contract,
+                mark,
+                marketIv,
+                volatilitySource: marketIv == null ? "forecast volatility fallback" : "market or price-implied IV",
+                predictedValue,
+                projectedSpot,
+                tradeTimestamp,
+                openedAt: position.openedAt ?? "",
+                entryPrice: position.entryPrice ?? "",
+                positionChange,
+            };
+        })
+        .filter(Boolean)
+        .sort((a, b) => {
+            const relevance = (row) =>
+                Math.abs(row.strike - metrics.currentPrice) / metrics.currentPrice
+                + Math.abs(row.daysToExpiry - horizon * 7 / 5) / 100;
+            return relevance(a) - relevance(b);
+        })
+        .slice(0, 20);
+};
+
 /* ================================================================== */
 /* PROBABILITY MODELS                                                  */
 /* ================================================================== */
@@ -1590,7 +1738,7 @@ const buildMetrics = ({ prices, series, optionsData, obi, rfRate, benchPrices })
     /* ---- annualized drift ---- */
     const directionalScore = 0.45 * obi + 0.25 * momentum + 0.3 * trend;
     const recommendedDrift = clamp(directionalScore * 0.1, -0.1, 0.1);
-    const adaptedDrift = recommendedDrift;
+    const adaptedDrift = clamp(rfRate + recommendedDrift, -0.25, 0.35);
 
     /* ---- full-window risk & return ---- */
     const years = returns.length / TRADING_DAYS;
@@ -1734,7 +1882,7 @@ const buildForecast = ({ metrics, prices, level = 80 }) => {
     // 2) Damped Holt on log prices
     const holtPath = holtDamped(prices.map(Math.log), FORECAST_DAYS);
 
-    // 3) GBM median and 80% band
+    // 3) GBM median and the selected central confidence band
     const gbmPath = [];
     const gbmLow = [];
     const gbmHigh = [];
@@ -2057,7 +2205,7 @@ const contextAsText = (c) =>
             ? `Target: ${money(c.target)}. Chance of finishing at or beyond it: ${pct(c.targetChance.terminal, 1)}. Chance of touching it at some point: ${pct(c.targetChance.touch, 1)}.`
             : "No target set.",
         `Setup read: ${c.verdict.label} (score ${num(c.verdict.score)}). ${c.verdict.action}`,
-        `30-session forecast: consensus ${money(c.forecast30.consensus)}, ${c.forecast30.bandLevel}% range ${money(c.forecast30.range80[0])} to ${money(c.forecast30.range80[1])}, chance of finishing above today ${pct(c.forecast30.chanceAbove, 0)}, model disagreement ${pct(c.forecast30.modelDisagreement, 1)}. AR(5) ${money(c.forecast30.models.ar)}, damped trend ${money(c.forecast30.models.dampedTrend)}, GBM ${money(c.forecast30.models.gbm)}.`,
+        `30-session forecast: consensus ${money(c.forecast30.consensus)}, ${c.forecast30.bandLevel}% range ${money(c.forecast30.confidenceRange[0])} to ${money(c.forecast30.confidenceRange[1])}, chance of finishing above today ${pct(c.forecast30.chanceAbove, 0)}, model disagreement ${pct(c.forecast30.modelDisagreement, 1)}. AR(5) ${money(c.forecast30.models.ar)}, damped trend ${money(c.forecast30.models.dampedTrend)}, GBM ${money(c.forecast30.models.gbm)}.`,
         "Indicators:",
         ...c.indicators.map((i) => `- ${i.name}: ${i.reading} (${i.tone})`),
         `Risk: Sharpe ${num(c.risk.sharpe)}, max drawdown ${pct(c.risk.maxDrawdown, 1)}, current drawdown ${pct(c.risk.currentDrawdown, 1)}, 1-day VaR 95% ${pct(c.risk.var95, 2)}, expected shortfall 95% ${pct(c.risk.expectedShortfall95, 2)}, beta ${num(c.risk.beta)}, annual volatility ${pct(c.risk.annualVol, 1)}.`,
@@ -2360,21 +2508,36 @@ const ForecastTip = ({ active, payload, label, level = 80 }) => {
 /* COMPONENT                                                           */
 /* ================================================================== */
 
+const TrajectoryTip = ({ active, payload, label, level }) => {
+    if (!active || !payload?.length) return null;
+    const point = payload[0].payload;
+    return (
+        <div style={{ background: "#fff", border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px", boxShadow: SHADOW }}>
+            <div style={{ color: MUTED, fontSize: 11, marginBottom: 5 }}>Day {label}</div>
+            <div style={{ fontSize: 12 }}>Median: <strong>{money(point.median)}</strong></div>
+            <div style={{ fontSize: 12 }}>{level}% range: <strong>{money(point.pLow)} – {money(point.pHigh)}</strong></div>
+        </div>
+    );
+};
+
 export default function Forecast({ initialTicker = "" }) {
     const requestedTicker = typeof initialTicker === "string" ? initialTicker.trim().toUpperCase() : "";
     const [ticker, setTicker] = useState(requestedTicker || "GOOGL");
     const [categoryOverride, setCategoryOverride] = useState(null);
     const [customTicker, setCustomTicker] = useState("");
     const [targetPrice, setTargetPrice] = useState(null);
-    const [targetDay, setTargetDay] = useState(120);
+    const [targetDay, setTargetDay] = useState(30);
     const [rfPercent, setRfPercent] = useState(4);
-    const [chartWindow, setChartWindow] = useState(180);
+    const [chartWindow, setChartWindow] = useState(730);
     const [spectrumMode, setSpectrumMode] = useState("move");
-    const [bandLevel, setBandLevel] = useState(68);
+    const [bandLevel, setBandLevel] = useState(67);
     const [priceData, setPriceData] = useState([]);
+    const [volumeBars, setVolumeBars] = useState([]);
     const [benchPrices, setBenchPrices] = useState([]);
     const [optionsData, setOptionsData] = useState(null);
     const [optionsError, setOptionsError] = useState(null);
+    const [marketContext, setMarketContext] = useState(null);
+    const [optionPositions, setOptionPositions] = useState({});
     const [obi, setObi] = useState(0);
     const [obiAvailable, setObiAvailable] = useState(false);
     const [news, setNews] = useState([]);
@@ -2470,6 +2633,8 @@ export default function Forecast({ initialTicker = "" }) {
             setLoading(true);
             setError(null);
             setOptionsError(null);
+            setOptionsData(null);
+            setMarketContext(null);
             try {
                 const end = new Date();
                 const start = new Date();
@@ -2482,12 +2647,12 @@ export default function Forecast({ initialTicker = "" }) {
                 const settled = await Promise.allSettled([
                     fetch(`${BACKEND_URL}/getData/${sym}/${from}/${to}`),
                     fetch(`${BACKEND_URL}/alpaca/options/${sym}?limit=1000`),
-                    fetch(`${BACKEND_URL}/getOrderBook/${sym}?feed=iex`),
+                    fetch(`${BACKEND_URL}/market/overview/${sym}?feed=iex`),
                     fetch(`${BACKEND_URL}/getData/${bench}/${from}/${to}`),
                 ]);
                 if (cancelled) return;
 
-                const [priceJson, optionsJson, bookJson, benchJson] = await Promise.all(settled.map(readJson));
+                const [priceJson, optionsJson, contextJson, benchJson] = await Promise.all(settled.map(readJson));
                 if (cancelled) return;
 
                 const nextPrices = extractPriceArray(priceJson);
@@ -2495,8 +2660,10 @@ export default function Forecast({ initialTicker = "" }) {
                     throw new Error(priceJson?.error || `No price data returned for ${activeTicker}.`);
                 }
 
-                const nextObi = extractOBI(bookJson);
+                const nextObi = extractOBI(contextJson?.quote);
                 setPriceData(nextPrices);
+                setVolumeBars(extractVolumeBars(priceJson));
+                setMarketContext(contextJson);
                 const optionRequest = settled[1];
                 if (optionRequest.status === "rejected") {
                     setOptionsError(optionRequest.reason?.message || "Options data request failed.");
@@ -2520,6 +2687,7 @@ export default function Forecast({ initialTicker = "" }) {
                 if (!cancelled) {
                     setError(err.message || "Unable to load market data.");
                     setPriceData([]);
+                    setVolumeBars([]);
                     setBenchPrices([]);
                 }
             } finally {
@@ -2588,16 +2756,26 @@ export default function Forecast({ initialTicker = "" }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTicker, metrics?.currentPrice]);
 
-    const ctx = useMemo(() => ({ price: metrics?.currentPrice, horizon }), [metrics, horizon]);
+    const ctx = useMemo(
+        () => ({ price: metrics?.currentPrice, horizon, confidence: bandLevel }),
+        [metrics, horizon, bandLevel]
+    );
 
     const horizonStats = useMemo(() => {
         if (!metrics) return null;
         const T = horizon / TRADING_DAYS;
         const sigma = metrics.adaptedVol;
-        const sd = sigma * Math.sqrt(T);
+        const sd = zForLevel(bandLevel) * sigma * Math.sqrt(T);
         const median = metrics.currentPrice * Math.exp((metrics.adaptedDrift - 0.5 * sigma * sigma) * T);
         return { median, low: median * Math.exp(-sd), high: median * Math.exp(sd), sd };
-    }, [metrics, horizon]);
+    }, [metrics, horizon, bandLevel]);
+
+    const optionRows = useMemo(
+        () => buildOptionRows(optionsData?.options, metrics, horizon, rfRate, optionPositions),
+        [optionsData, metrics, horizon, rfRate, optionPositions]
+    );
+
+    const recentVolume = useMemo(() => volumeSummary(volumeBars), [volumeBars]);
 
     const selected = useMemo(() => probabilityFor(metrics, horizon, targetK), [metrics, horizon, targetK]);
 
@@ -2779,23 +2957,25 @@ export default function Forecast({ initialTicker = "" }) {
         const S0 = metrics.currentPrice;
         const sigma = metrics.adaptedVol;
         const mu = metrics.adaptedDrift;
+        const bandZ = zForLevel(bandLevel);
         const nodes = [];
         for (let i = 1; i <= days; i++) {
             const t = i / TRADING_DAYS;
-            const sqrtT = Math.sqrt(t);
-            const base = Math.exp((mu - 0.5 * sigma * sigma) * t);
-            const at = (z) => S0 * base * Math.exp(z * sigma * sqrtT);
+            const median = S0 * Math.exp((mu - 0.5 * sigma * sigma) * t);
+            const halfBand = bandZ * sigma * Math.sqrt(t);
+            const lower = median * Math.exp(-halfBand);
+            const upper = median * Math.exp(halfBand);
             nodes.push({
                 day: i,
-                p05: at(-1.645),
-                p25: at(-0.674),
-                median: S0 * base,
-                p75: at(0.674),
-                p95: at(1.645),
+                pLow: lower,
+                pHigh: upper,
+                median,
+                bandBase: lower,
+                bandWidth: upper - lower,
             });
         }
         return nodes;
-    }, [metrics, horizon]);
+    }, [metrics, horizon, bandLevel]);
 
     /* ------------------------------ LISTS ------------------------------ */
 
@@ -2811,6 +2991,8 @@ export default function Forecast({ initialTicker = "" }) {
             ["fvol", "Forecast volatility (annual)", pct(metrics.adaptedVol), metrics.adaptedVol],
         ]
         : [];
+    const headlineCards = coreCards.filter(([id]) => ["price", "baseline", "fvol", "dirscore"].includes(id));
+    const additionalCoreCards = coreCards.filter(([id]) => !["price", "baseline", "fvol", "dirscore"].includes(id));
 
     const riskItems = metrics
         ? [
@@ -2883,7 +3065,7 @@ export default function Forecast({ initialTicker = "" }) {
             targetChance: { terminal: selected?.terminal ?? null, touch: selected?.touch ?? null },
             forecast30: {
                 consensus: forecast.ens30,
-                range80: [forecast.gbmLow30, forecast.gbmHigh30],
+                confidenceRange: [forecast.gbmLow30, forecast.gbmHigh30],
                 bandLevel: forecast.level,
                 chanceAbove: forecast.chanceUp,
                 modelDisagreement: forecast.spread,
@@ -3008,7 +3190,7 @@ export default function Forecast({ initialTicker = "" }) {
         setArticleAI((prev) => ({ ...prev, [key]: { status: "loading" } }));
 
         const snapshot = aiContext
-            ? `Stock context from this dashboard for ${activeTicker}: price ${money(aiContext.price)}, setup read "${aiContext.verdict.label}", 30-session consensus ${money(aiContext.forecast30.consensus)} with an 80% range of ${money(aiContext.forecast30.range80[0])} to ${money(aiContext.forecast30.range80[1])}, chance of finishing above today ${pct(aiContext.forecast30.chanceAbove, 0)}, beta ${num(aiContext.risk.beta)}, maximum drawdown ${pct(aiContext.risk.maxDrawdown, 1)}.`
+            ? `Stock context from this dashboard for ${activeTicker}: price ${money(aiContext.price)}, setup read "${aiContext.verdict.label}", 30-session consensus ${money(aiContext.forecast30.consensus)} with a ${aiContext.forecast30.bandLevel}% range of ${money(aiContext.forecast30.confidenceRange[0])} to ${money(aiContext.forecast30.confidenceRange[1])}, chance of finishing above today ${pct(aiContext.forecast30.chanceAbove, 0)}, beta ${num(aiContext.risk.beta)}, maximum drawdown ${pct(aiContext.risk.maxDrawdown, 1)}.`
             : `Stock context: ${activeTicker}.`;
 
         try {
@@ -3162,12 +3344,14 @@ export default function Forecast({ initialTicker = "" }) {
                             style={inputStyle}
                         />
                     </Field>
-                    <Field label="Risk-free rate (%)">
+                    <Field label="Risk-free baseline (%)">
                         <input
                             type="number"
+                            min="-10"
+                            max="25"
                             step="0.1"
                             value={rfPercent}
-                            onChange={(e) => setRfPercent(Number(e.target.value) || 0)}
+                            onChange={(e) => setRfPercent(clamp(Number(e.target.value) || 0, -10, 25))}
                             style={inputStyle}
                         />
                     </Field>
@@ -3185,6 +3369,65 @@ export default function Forecast({ initialTicker = "" }) {
                         </select>
                     </Field>
                 </Card>
+
+                {marketContext && (
+                    <Card>
+                        <SectionHeader
+                            title="Market context"
+                            subtitle="Company size, current session activity, and top-of-book liquidity from Polygon and Alpaca."
+                            right={
+                                marketContext.available
+                                    ? <Pill tone="bull">Live data returned</Pill>
+                                    : <Pill tone="warn">Provider data unavailable</Pill>
+                            }
+                        />
+                        <div style={grid(150)}>
+                            {[
+                                ["Market capitalization", compactMoney(marketContext.company?.marketCap)],
+                                ["Session volume", compactNumber(marketContext.session?.volume)],
+                                ["Session trades", compactNumber(marketContext.session?.tradeCount)],
+                                ["Top-book imbalance", marketContext.quote?.obi != null && Number.isFinite(Number(marketContext.quote.obi))
+                                    ? signed(Number(marketContext.quote.obi), 3)
+                                    : "Unavailable"],
+                            ].map(([label, value]) => (
+                                <div key={label} style={{ ...panelStyle, padding: "12px 14px" }}>
+                                    <div style={{ fontSize: 11, color: MUTED, marginBottom: 7 }}>{label}</div>
+                                    <div style={{ fontSize: 17, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+                                </div>
+                            ))}
+                        </div>
+                        <details style={{ marginTop: 12 }}>
+                            <summary style={{ cursor: "pointer", color: MUTED, fontSize: 12 }}>
+                                More liquidity and volume breakdown
+                            </summary>
+                            <div style={{ ...grid(170), marginTop: 10 }}>
+                                {[
+                                    ["Session VWAP", money(marketContext.session?.vwap)],
+                                    ["Bid size", compactNumber(marketContext.quote?.bidSize)],
+                                    ["Ask size", compactNumber(marketContext.quote?.askSize)],
+                                    ["Shares outstanding", compactNumber(marketContext.company?.sharesOutstanding)],
+                                    ["Up-candle volume · 30 sessions", recentVolume.count ? compactNumber(recentVolume.up) : "Unavailable"],
+                                    ["Down-candle volume · 30 sessions", recentVolume.count ? compactNumber(recentVolume.down) : "Unavailable"],
+                                    ["Total volume · 30 sessions", recentVolume.count ? compactNumber(recentVolume.total) : "Unavailable"],
+                                ].map(([label, value]) => (
+                                    <div key={label} style={{ padding: "8px 4px", color: MUTED, fontSize: 12 }}>
+                                        <span>{label}: </span><strong style={{ color: INK }}>{value}</strong>
+                                    </div>
+                                ))}
+                            </div>
+                            <div style={{ marginTop: 5, color: MUTED, fontSize: 11, lineHeight: 1.5 }}>
+                                Up/down candle volume groups share volume by whether each daily candle closed above or below its open; it is not exchange-classified buyer/seller-initiated volume. Bid/ask sizes are current top-of-book liquidity.
+                            </div>
+                        </details>
+                        {Object.entries(marketContext.errors ?? {}).length > 0 && (
+                            <div style={{ marginTop: 10, color: MUTED, fontSize: 11, lineHeight: 1.5 }}>
+                                {Object.entries(marketContext.errors).map(([source, message]) => (
+                                    <div key={source}><strong>{source}:</strong> {message}</div>
+                                ))}
+                            </div>
+                        )}
+                    </Card>
+                )}
 
                 {loading && (
                     <div
@@ -3235,41 +3478,110 @@ export default function Forecast({ initialTicker = "" }) {
                     </div>
                 )}
 
-                {optionsData?.options?.length > 0 && (
+                {optionsData?.options?.length > 0 && optionRows.length === 0 && (
+                    <div role="status" style={{ marginBottom: 20, color: MUTED, fontSize: 12 }}>
+                        The provider returned option snapshots, but their symbols could not be decoded as standard listed contracts.
+                    </div>
+                )}
+
+                {optionRows.length > 0 && (
                     <Card style={{ marginBottom: 20 }}>
                         <SectionHeader
-                            title={`Live options snapshots — ${activeTicker}`}
-                            subtitle="Latest available option trades, indicative quotes, and Greeks from Alpaca."
+                            title={`Options: calls, puts, expiry and scenario value — ${activeTicker}`}
+                            subtitle={`Nearest-to-the-money listed contracts. The model value is an estimated option price at day ${horizon}, using the stock's forecast median and Black–Scholes (no dividends or early exercise).`}
                             right={<Pill tone="neutral">{optionsData.count ?? optionsData.options.length} contracts</Pill>}
                         />
+                        <p style={{ margin: "0 0 12px", color: MUTED, fontSize: 12, lineHeight: 1.55 }}>
+                            CALL = right to buy at the strike; PUT = right to sell. Enter your actual opening date and premium to see your change since entry; Alpaca's public market feed does not expose your brokerage position or personal open date. If provider IV/Greeks are missing, the model estimates IV from the quote or falls back to forecast volatility.
+                        </p>
                         <div style={{ overflowX: "auto" }}>
-                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 1050 }}>
                                 <thead>
                                     <tr>
-                                        {["Contract", "Last trade", "Bid", "Ask", "Implied volatility", "Delta"].map((label) => (
-                                            <th key={label} style={{ padding: "8px 10px", borderBottom: `1px solid ${LINE}`, color: MUTED, textAlign: "left", whiteSpace: "nowrap" }}>
+                                        {["Option / strike", "Expiration", "Last trade", "Bid / ask", "IV / delta", `Model value · day ${horizon}`, "Your position"].map((label) => (
+                                            <th key={label} style={{ padding: "9px 10px", borderBottom: `1px solid ${LINE}`, color: MUTED, textAlign: "left", whiteSpace: "nowrap" }}>
                                                 {label}
                                             </th>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {optionsData.options.slice(0, 20).map((option) => {
+                                    {optionRows.map((option) => {
                                         const formatOptionValue = (value) =>
-                                            value == null || !Number.isFinite(Number(value))
-                                                ? "—"
-                                                : Number(value).toFixed(2);
-                                        const iv = option.greeks?.iv;
+                                            value == null || !Number.isFinite(Number(value)) ? "—" : `$${Number(value).toFixed(2)}`;
+                                        const tradeTime = Date.parse(option.tradeTimestamp);
+                                        const predictedChange = option.mark > 0 ? option.predictedValue / option.mark - 1 : null;
                                         return (
-                                            <tr key={option.symbol}>
-                                                <td style={{ padding: "8px 10px", borderBottom: `1px solid ${LINE}`, fontWeight: 600, whiteSpace: "nowrap" }}>{option.symbol}</td>
-                                                <td style={{ padding: "8px 10px", borderBottom: `1px solid ${LINE}` }}>{formatOptionValue(option.trade?.price)}</td>
-                                                <td style={{ padding: "8px 10px", borderBottom: `1px solid ${LINE}` }}>{formatOptionValue(option.quote?.bidPrice)}</td>
-                                                <td style={{ padding: "8px 10px", borderBottom: `1px solid ${LINE}` }}>{formatOptionValue(option.quote?.askPrice)}</td>
-                                                <td style={{ padding: "8px 10px", borderBottom: `1px solid ${LINE}` }}>
-                                                    {iv == null || !Number.isFinite(Number(iv)) ? "—" : `${(Number(iv) * 100).toFixed(1)}%`}
+                                            <tr key={option.symbol} style={{ borderBottom: `1px solid ${LINE}` }}>
+                                                <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
+                                                    <div style={{ color: option.right === "C" ? TONE.bull : TONE.bear, fontWeight: 700 }}>
+                                                        {option.type.toUpperCase()} · {money(option.strike)}
+                                                    </div>
+                                                    <div style={{ marginTop: 3, color: MUTED, fontSize: 10 }}>{option.symbol}</div>
                                                 </td>
-                                                <td style={{ padding: "8px 10px", borderBottom: `1px solid ${LINE}` }}>{formatOptionValue(option.greeks?.delta)}</td>
+                                                <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
+                                                    {option.expiration}<div style={{ marginTop: 3, color: MUTED }}>{option.daysToExpiry} calendar days left</div>
+                                                </td>
+                                                <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
+                                                    {formatOptionValue(option.trade?.price)}
+                                                    <div style={{ marginTop: 3, color: MUTED, fontSize: 10 }}>
+                                                        {Number.isFinite(tradeTime) ? new Date(tradeTime).toLocaleString() : "Trade time unavailable"}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
+                                                    {formatOptionValue(option.quote?.bidPrice)} / {formatOptionValue(option.quote?.askPrice)}
+                                                </td>
+                                                <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
+                                                    {option.marketIv == null ? "—" : `${(option.marketIv * 100).toFixed(1)}%`}
+                                                    <div style={{ marginTop: 3, color: MUTED }}>Δ {Number.isFinite(Number(option.greeks?.delta)) ? Number(option.greeks.delta).toFixed(2) : "—"}</div>
+                                                </td>
+                                                <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
+                                                    <strong>{formatOptionValue(option.predictedValue)}</strong>
+                                                    <div style={{ marginTop: 3, color: predictedChange == null ? MUTED : predictedChange >= 0 ? TONE.bull : TONE.bear }}>
+                                                        {movePct(predictedChange)} vs current mark
+                                                    </div>
+                                                    <div style={{ marginTop: 3, color: MUTED, fontSize: 10 }}>{option.volatilitySource}</div>
+                                                </td>
+                                                <td style={{ padding: "10px", minWidth: 185 }}>
+                                                    <div style={{ display: "grid", gap: 5 }}>
+                                                        <input
+                                                            aria-label={`Opening date for ${option.symbol}`}
+                                                            type="date"
+                                                            value={option.openedAt}
+                                                            onChange={(event) => setOptionPositions((previous) => ({
+                                                                ...previous,
+                                                                [option.symbol]: {
+                                                                    ...(previous[option.symbol] ?? {}),
+                                                                    openedAt: event.target.value,
+                                                                },
+                                                            }))}
+                                                            style={{ ...inputStyle, padding: "5px 7px", fontSize: 11 }}
+                                                        />
+                                                        <input
+                                                            aria-label={`Entry premium for ${option.symbol}`}
+                                                            type="number"
+                                                            min="0"
+                                                            step="0.01"
+                                                            placeholder="Entry premium ($)"
+                                                            value={option.entryPrice}
+                                                            onChange={(event) => setOptionPositions((previous) => ({
+                                                                ...previous,
+                                                                [option.symbol]: {
+                                                                    ...(previous[option.symbol] ?? {}),
+                                                                    entryPrice: event.target.value,
+                                                                },
+                                                            }))}
+                                                            style={{ ...inputStyle, padding: "5px 7px", fontSize: 11 }}
+                                                        />
+                                                        <span style={{
+                                                            color: option.positionChange == null ? MUTED : option.positionChange >= 0 ? TONE.bull : TONE.bear,
+                                                            fontSize: 11,
+                                                            fontWeight: 600,
+                                                        }}>
+                                                            {option.positionChange == null ? "Enter premium for change" : `${movePct(option.positionChange)} since entry`}
+                                                        </span>
+                                                    </div>
+                                                </td>
                                             </tr>
                                         );
                                     })}
@@ -3509,47 +3821,59 @@ export default function Forecast({ initialTicker = "" }) {
                 {/* INDICATORS */}
                 {indicators.length > 0 && (
                     <Card>
-                        <SectionHeader
-                            title="Indicators"
-                            subtitle="Hover a name to see how the figure is built. Hover a reading to see what it implies for this stock right now. These describe the current state and are not trade signals."
-                            right={
-                                <div style={{ display: "flex", gap: 14, fontSize: 13, color: MUTED }}>
-                                    <span style={{ color: TONE.bull }}>{tally.bull || 0} bullish</span>
-                                    <span style={{ color: TONE.bear }}>{tally.bear || 0} bearish</span>
-                                    <span style={{ color: TONE.warn }}>{tally.warn || 0} to watch</span>
-                                </div>
-                            }
-                        />
-                        <div style={grid(200)}>
-                            {indicators.map((it) => (
-                                <Metric
-                                    key={it.id}
-                                    id={it.id}
-                                    label={it.label}
-                                    value={it.value}
-                                    raw={it.raw}
-                                    ctx={ctx}
-                                    tone={it.tone}
-                                    sub={TONE_WORD[it.tone]}
-                                    accent
-                                />
-                            ))}
-                        </div>
+                        <details>
+                            <summary style={{ cursor: "pointer", fontWeight: 600, color: INK, fontSize: 15 }}>
+                                All technical indicators ({indicators.length}) · {tally.bull || 0} bullish, {tally.bear || 0} bearish, {tally.warn || 0} to watch
+                            </summary>
+                            <p style={{ margin: "12px 0 16px", color: MUTED, fontSize: 12, lineHeight: 1.6 }}>
+                                Hover a name to see how the figure is built and its reading to see what it implies. Indicators describe the current state; they are not trade signals.
+                            </p>
+                            <div style={grid(200)}>
+                                {indicators.map((it) => (
+                                    <Metric
+                                        key={it.id}
+                                        id={it.id}
+                                        label={it.label}
+                                        value={it.value}
+                                        raw={it.raw}
+                                        ctx={ctx}
+                                        tone={it.tone}
+                                        sub={TONE_WORD[it.tone]}
+                                        accent
+                                    />
+                                ))}
+                            </div>
+                        </details>
                     </Card>
                 )}
 
                 {/* CORE METRICS */}
                 {metrics && (
-                    <div style={{ ...grid(180), marginBottom: 20 }}>
-                        {coreCards.map(([id, label, value, raw]) => (
+                    <>
+                    <div style={{ ...grid(180), marginBottom: 12 }}>
+                        {headlineCards.map(([id, label, value, raw]) => (
                             <Metric key={id} id={id} label={label} value={value} raw={raw} ctx={ctx} />
                         ))}
                     </div>
+                    <Card>
+                        <details>
+                            <summary style={{ cursor: "pointer", fontWeight: 600, color: INK, fontSize: 14 }}>
+                                More volatility and momentum metrics ({additionalCoreCards.length})
+                            </summary>
+                            <div style={{ ...grid(180), marginTop: 14 }}>
+                                {additionalCoreCards.map(([id, label, value, raw]) => (
+                                    <Metric key={id} id={id} label={label} value={value} raw={raw} ctx={ctx} />
+                                ))}
+                            </div>
+                        </details>
+                    </Card>
+                    </>
                 )}
 
                 {/* TARGET RESULTS */}
                 {metrics && selected && horizonStats && (
-                    <div style={{ ...grid(200), marginBottom: 20 }}>
+                    <>
+                    <div style={{ ...grid(200), marginBottom: 12 }}>
                         <Metric
                             id="target"
                             big
@@ -3568,30 +3892,6 @@ export default function Forecast({ initialTicker = "" }) {
                             ctx={ctx}
                         />
                         <Metric
-                            id="touch"
-                            big
-                            label="Touch probability"
-                            value={pct(selected.touch, 1)}
-                            raw={selected.touch}
-                            ctx={ctx}
-                        />
-                        <Metric
-                            id="reqz"
-                            big
-                            label="Required z-score"
-                            value={num(selected.requiredZ, 3)}
-                            raw={selected.requiredZ}
-                            ctx={ctx}
-                        />
-                        <Metric
-                            id="tmove"
-                            big
-                            label="Target move"
-                            value={hasTarget ? movePct(targetK / metrics.currentPrice - 1) : "—"}
-                            raw={hasTarget ? targetK / metrics.currentPrice - 1 : null}
-                            ctx={ctx}
-                        />
-                        <Metric
                             id="median"
                             big
                             label="Median at horizon"
@@ -3599,16 +3899,36 @@ export default function Forecast({ initialTicker = "" }) {
                             raw={horizonStats.median}
                             ctx={ctx}
                         />
-                        <Metric
-                            id="band"
-                            big
-                            label="1σ range at horizon"
-                            value={`${money(horizonStats.low)} – ${money(horizonStats.high)}`}
-                            raw={horizonStats.sd}
-                            ctx={ctx}
-                            sub={`±${pct(horizonStats.sd, 1)} expected move`}
-                        />
                     </div>
+                    <Card>
+                        <details>
+                            <summary style={{ cursor: "pointer", fontWeight: 600, color: INK, fontSize: 14 }}>
+                                More target probabilities and confidence range
+                            </summary>
+                            <div style={{ ...grid(200), marginTop: 14 }}>
+                                <Metric id="touch" big label="Touch probability" value={pct(selected.touch, 1)} raw={selected.touch} ctx={ctx} />
+                                <Metric id="reqz" big label="Required z-score" value={num(selected.requiredZ, 3)} raw={selected.requiredZ} ctx={ctx} />
+                                <Metric
+                                    id="tmove"
+                                    big
+                                    label="Target move"
+                                    value={hasTarget ? movePct(targetK / metrics.currentPrice - 1) : "—"}
+                                    raw={hasTarget ? targetK / metrics.currentPrice - 1 : null}
+                                    ctx={ctx}
+                                />
+                                <Metric
+                                    id="band"
+                                    big
+                                    label={`${bandLevel}% range at horizon`}
+                                    value={`${money(horizonStats.low)} – ${money(horizonStats.high)}`}
+                                    raw={horizonStats.sd}
+                                    ctx={ctx}
+                                    sub={`±${pct(horizonStats.sd, 1)} expected move`}
+                                />
+                            </div>
+                        </details>
+                    </Card>
+                    </>
                 )}
 
                 {/* PRICE & MOVING AVERAGES */}
@@ -3661,7 +3981,7 @@ export default function Forecast({ initialTicker = "" }) {
                     <Card>
                         <SectionHeader
                             title="Next 30 sessions"
-                            subtitle="Three models project forward from the same history. The consensus is their average. The shaded band is the 80% range from the volatility model."
+                            subtitle={`Three models project forward from the same history. The consensus is their average. The shaded band is the selected ${bandLevel}% range from the volatility model.`}
                         />
                         <div style={{ ...grid(180), marginBottom: 18 }}>
                             <Metric
@@ -3674,7 +3994,7 @@ export default function Forecast({ initialTicker = "" }) {
                             />
                             <Metric
                                 id="band30"
-                                label="80% range, day 30"
+                                label={`${bandLevel}% range, day 30`}
                                 value={`${money(forecast.gbmLow30)} – ${money(forecast.gbmHigh30)}`}
                                 raw={forecast.band30Sd}
                                 ctx={ctx}
@@ -4273,20 +4593,25 @@ export default function Forecast({ initialTicker = "" }) {
                             </ComposedChart>
                         </ChartBox>
                         {metrics && (
-                            <div style={{ ...grid(170), marginTop: 22 }}>
-                                {riskItems.map(([id, label, value, raw, tone]) => (
-                                    <Metric
-                                        key={id}
-                                        id={id}
-                                        label={label}
-                                        value={value}
-                                        raw={raw}
-                                        ctx={ctx}
-                                        tone={tone}
-                                        panel={false}
-                                    />
-                                ))}
-                            </div>
+                            <details style={{ marginTop: 18 }}>
+                                <summary style={{ cursor: "pointer", color: INK, fontWeight: 600, fontSize: 13 }}>
+                                    Detailed risk and return statistics ({riskItems.length})
+                                </summary>
+                                <div style={{ ...grid(170), marginTop: 14 }}>
+                                    {riskItems.map(([id, label, value, raw, tone]) => (
+                                        <Metric
+                                            key={id}
+                                            id={id}
+                                            label={label}
+                                            value={value}
+                                            raw={raw}
+                                            ctx={ctx}
+                                            tone={tone}
+                                            panel={false}
+                                        />
+                                    ))}
+                                </div>
+                            </details>
                         )}
                     </Card>
                 )}
@@ -4377,10 +4702,10 @@ export default function Forecast({ initialTicker = "" }) {
                     <Card>
                         <SectionHeader
                             title="Forward trajectory"
-                            subtitle="Where the price could sit on each future day under the volatility model. The black line is the median; the red line is your target."
+                            subtitle={`A ${bandLevel}% model confidence cone over ${horizon} sessions. The shaded area is the selected range around the median; the dashed line is your target.`}
                         />
                         <ChartBox height={400}>
-                            <LineChart data={funnel} margin={{ top: 10, right: 40, left: 10, bottom: 10 }}>
+                            <AreaChart data={funnel} margin={{ top: 10, right: 40, left: 10, bottom: 10 }}>
                                 <CartesianGrid strokeDasharray="2 4" stroke={LINE} vertical={false} />
                                 <XAxis dataKey="day" tick={{ fontSize: 11, fill: MUTED }} tickLine={false} axisLine={{ stroke: LINE }} />
                                 <YAxis
@@ -4390,12 +4715,10 @@ export default function Forecast({ initialTicker = "" }) {
                                     axisLine={false}
                                     tickFormatter={(v) => `$${Number(v).toFixed(0)}`}
                                 />
-                                <Tooltip formatter={(v, name) => [money(Number(v)), name]} labelFormatter={(v) => `Day ${v}`} />
-                                <Line type="monotone" dataKey="p05" stroke="#b9bdc4" strokeWidth={1} dot={false} name="5th percentile" />
-                                <Line type="monotone" dataKey="p25" stroke="#7fa6e8" strokeWidth={1.5} dot={false} name="25th percentile" />
+                                <Tooltip content={<TrajectoryTip level={bandLevel} />} />
+                                <Area type="monotone" dataKey="bandBase" stackId="confidence" stroke="none" fill="transparent" />
+                                <Area type="monotone" dataKey="bandWidth" stackId="confidence" stroke={ACCENT} fill={ACCENT} fillOpacity={0.12} name={`${bandLevel}% range`} />
                                 <Line type="monotone" dataKey="median" stroke={INK} strokeWidth={2.5} dot={false} name="Median" />
-                                <Line type="monotone" dataKey="p75" stroke="#7fa6e8" strokeWidth={1.5} dot={false} name="75th percentile" />
-                                <Line type="monotone" dataKey="p95" stroke="#b9bdc4" strokeWidth={1} dot={false} name="95th percentile" />
                                 {hasTarget && (
                                     <ReferenceLine
                                         y={targetK}
@@ -4405,7 +4728,7 @@ export default function Forecast({ initialTicker = "" }) {
                                         label={{ value: "Target", position: "right", fontSize: 11, fill: TONE.bear }}
                                     />
                                 )}
-                            </LineChart>
+                            </AreaChart>
                         </ChartBox>
                     </Card>
                 )}

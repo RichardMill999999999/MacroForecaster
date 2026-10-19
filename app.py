@@ -76,6 +76,30 @@ portfolio_collection = (
     portfolio_db["PortfolioWorkspaces"] if portfolio_db is not None else None
 )
 
+
+def mongo_connection_status():
+    if client is None:
+        return False, "MongoDB is not configured. Set MONGO_URI in .env."
+    try:
+        client.admin.command("ping")
+        return True, None
+    except PyMongoError as error:
+        app.logger.error("MongoDB connection check failed: %s", type(error).__name__)
+        return False, "MongoDB is configured but could not be reached."
+
+
+def persist_history_metrics(ticker, updates):
+    if collection is None:
+        app.logger.error("MongoDB history update requested without MONGO_URI")
+        return False
+    try:
+        collection.update_one({"ticker": ticker}, {"$set": updates}, upsert=True)
+        return True
+    except PyMongoError as error:
+        app.logger.error("MongoDB metrics update failed: %s", type(error).__name__)
+        return False
+
+
 FRED_API_KEY = os.getenv("FRED_API_KEY")
 fred = Fred(api_key=FRED_API_KEY)
 
@@ -104,13 +128,17 @@ def deepseek_client():
 @app.route("/health")
 def health():
     """Shows which integrations are configured (never prints the secrets)."""
+    mongo_connected, mongo_error = mongo_connection_status()
     return jsonify({
         "ok": True,
         "configured": {
             "mongo": bool(os.getenv("MONGO_URI")),
             "mongoDatabase": os.getenv("MONGO_DB_NAME", "EconomicStudies"),
+            "mongoConnected": mongo_connected,
+            "mongoError": mongo_error,
             "fred": bool(FRED_API_KEY),
             "alpaca": bool(ALPACA_API_KEY and ALPACA_SECRET_KEY),
+            "polygon": bool(os.getenv("POLYGON_API_KEY")),
             "deepseek": bool(os.getenv("OPENAI_API_KEY2")),
             "newsdata": bool(os.getenv("NEWSDATA_API_KEY")),
             "inegi": bool(os.getenv("INEGI_TOKEN")),
@@ -181,20 +209,37 @@ def portfolio_workspace():
 
 @app.route("/history/saveData", methods=["POST"])
 def saveData():
-    collection.insert_one(request.get_json())
+    if collection is None:
+        return jsonify({"error": "MongoDB is not configured. Set MONGO_URI in .env."}), 503
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "A JSON object is required."}), 400
+    try:
+        collection.insert_one(payload)
+    except PyMongoError as error:
+        app.logger.error("MongoDB history save failed: %s", type(error).__name__)
+        return jsonify({"error": "Historical data could not be saved to MongoDB."}), 503
     return "success"
 
 
 @app.route("/history/getHistory")
 def getHistory():
-    data = list(collection.find({}))
-    for item in data:
-        item["_id"] = str(item["_id"])
-    return jsonify(data)
+    if collection is None:
+        return jsonify({"error": "MongoDB is not configured. Set MONGO_URI in .env."}), 503
+    try:
+        data = list(collection.find({}))
+        for item in data:
+            item["_id"] = str(item["_id"])
+        return jsonify(data)
+    except PyMongoError as error:
+        app.logger.error("MongoDB history read failed: %s", type(error).__name__)
+        return jsonify({"error": "Historical data could not be loaded from MongoDB."}), 503
 
 
 @app.route("/saveInvestigation/<name>/<startDate>/<endDate>/<dependentVariables>/<independentVariables>")
 def saveInvestigation(name, startDate, endDate, dependentVariables, independentVariables):
+    if db is None:
+        return jsonify({"error": "MongoDB is not configured. Set MONGO_URI in .env."}), 503
     data = {
         "name": name,
         "startDate": startDate,
@@ -202,16 +247,26 @@ def saveInvestigation(name, startDate, endDate, dependentVariables, independentV
         "dependentVariables": dependentVariables,
         "independentVariables": independentVariables,
     }
-    result = db["Investigations"].insert_one(data)
+    try:
+        result = db["Investigations"].insert_one(data)
+    except PyMongoError as error:
+        app.logger.error("MongoDB investigation save failed: %s", type(error).__name__)
+        return jsonify({"error": "The investigation could not be saved to MongoDB."}), 503
     return jsonify({"status": "success", "inserted_id": str(result.inserted_id)})
 
 
 @app.route("/getInvestigations")
 def getInvestigations():
-    investigations = list(db["Investigations"].find())
-    for item in investigations:
-        item["_id"] = str(item["_id"])
-    return jsonify(investigations)
+    if db is None:
+        return jsonify({"error": "MongoDB is not configured. Set MONGO_URI in .env."}), 503
+    try:
+        investigations = list(db["Investigations"].find())
+        for item in investigations:
+            item["_id"] = str(item["_id"])
+        return jsonify(investigations)
+    except PyMongoError as error:
+        app.logger.error("MongoDB investigation read failed: %s", type(error).__name__)
+        return jsonify({"error": "Investigations could not be loaded from MongoDB."}), 503
 
 
 # =========================================================
@@ -240,23 +295,6 @@ def IndicatorData(indicator_id, CountryName):
 @app.route("/getData/<searchValue>/<startDate>/<endDate>")
 def getData(searchValue, startDate, endDate):
     return InvestmentFinanceAPI.DailyClosingValuesByName(searchValue, startDate, endDate)
-
-
-@app.route("/getOptions/<searchValue>", methods=["GET"])
-def getOptions(searchValue):
-    """Mock option chain (kept as in your original). Real chains: /alpaca/options/<underlying>."""
-    try:
-        if searchValue.upper() not in ["GLD", "GOLD", "SPY", "AAPL"]:
-            return jsonify({"available": False, "options": []})
-        mock_options = [
-            {"strike": 4310, "type": "Call", "premium": 145.20},
-            {"strike": 4310, "type": "Put", "premium": 12.50},
-            {"strike": 4420, "type": "Call", "premium": 42.10},
-            {"strike": 4420, "type": "Put", "premium": 88.40},
-        ]
-        return jsonify({"available": True, "options": mock_options})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/resourcePrices")
@@ -294,7 +332,8 @@ def heteroskedasticityTests(ticker, startDate, endDate):
     pp = apply_phillips_perron_test(residuals)
     dfgls = apply_dickey_fuller_test(residuals)
     results2 = {"ADF": str(adf), "Phillips-Perron": pp, "DFGLS": dfgls}
-    collection.update_one({"ticker": ticker}, {"$set": {"stationality": results2}}, upsert=True)
+    if not persist_history_metrics(ticker, {"stationality": results2}):
+        return jsonify({"error": "MongoDB historical metrics could not be saved."}), 503
 
     # Heteroskedasticity
     try:
@@ -311,7 +350,8 @@ def heteroskedasticityTests(ticker, startDate, endDate):
         WT = str(e)
 
     results = {"WT": WT, "GQ": GQ, "BP": BP}
-    collection.update_one({"ticker": ticker}, {"$set": {"HeterocedasticityResults": results}}, upsert=True)
+    if not persist_history_metrics(ticker, {"HeterocedasticityResults": results}):
+        return jsonify({"error": "MongoDB historical metrics could not be saved."}), 503
 
     return jsonify([results, results2])
 
@@ -328,7 +368,8 @@ def ST(ticker, startDate, endDate):
         pp = apply_phillips_perron_test(residuals)
         dfgls = apply_dickey_fuller_test(residuals)
         results = {"ADF": str(adf), "Phillips-Perron": pp, "DFGLS": dfgls}
-        collection.update_one({"ticker": ticker}, {"$set": {"stationality": results}}, upsert=True)
+        if not persist_history_metrics(ticker, {"stationality": results}):
+            return jsonify({"error": "MongoDB historical metrics could not be saved."}), 503
         return jsonify(results)
     except Exception as e:
         return jsonify({"error": str(e)})
@@ -356,7 +397,8 @@ def calculate_basic_stats_route(ticker, startDate, endDate):
     stats_resp = calculate_basic_statistics(raw["datos"])
     stats = stats_resp.get_json() if isinstance(stats_resp, Response) else stats_resp
 
-    collection.update_one({"ticker": ticker}, {"$set": {"basicStats": stats}}, upsert=True)
+    if not persist_history_metrics(ticker, {"basicStats": stats}):
+        return jsonify({"error": "MongoDB historical metrics could not be saved."}), 503
     return jsonify({"ticker": ticker, "startDate": startDate, "endDate": endDate, "basicStats": stats})
 
 
@@ -367,7 +409,8 @@ def autoCorrelationTest(name, startDate, endDate):
         "aucorr": aucorr(fetchResults["datos"], 10),
         "aucorrParcial": aucorrParcial(fetchResults["datos"], 10),
     }
-    collection.update_one({"ticker": name}, {"$set": {"autoCorrelations": results}}, upsert=True)
+    if not persist_history_metrics(name, {"autoCorrelations": results}):
+        return jsonify({"error": "MongoDB historical metrics could not be saved."}), 503
     return jsonify(results)
 
 
@@ -869,6 +912,108 @@ def alpaca_latest_stock_bar(ticker):
     })
 
 
+@app.route("/market/overview/<ticker>", methods=["GET"])
+def market_overview(ticker):
+    """Combine supported company, quote, and session-activity data without inventing missing fields."""
+    ticker = ticker.upper().strip()
+    errors = {}
+    quote = None
+    latest_bar = None
+    company = None
+
+    if ALPACA_API_KEY and ALPACA_SECRET_KEY:
+        quote_data, quote_error = alpaca_request(
+            f"/v2/stocks/{ticker}/quotes/latest",
+            {"feed": request.args.get("feed", "iex")},
+            timeout=10,
+            ticker=ticker,
+        )
+        if quote_error:
+            error_response, _ = quote_error
+            errors["quote"] = (error_response.get_json(silent=True) or {}).get(
+                "error", "The latest quote could not be loaded."
+            )
+        else:
+            raw_quote = quote_data.get("quote", quote_data)
+            quote = {
+                "bidPrice": raw_quote.get("bp"),
+                "askPrice": raw_quote.get("ap"),
+                "bidSize": raw_quote.get("bs"),
+                "askSize": raw_quote.get("as"),
+                "obi": calculate_obi(raw_quote.get("bs"), raw_quote.get("as")),
+                "timestamp": raw_quote.get("t"),
+            }
+
+        end_date = pd.Timestamp.now(tz="UTC")
+        bar_data, bar_error = alpaca_request(
+            f"/v2/stocks/{ticker}/bars",
+            {
+                "timeframe": "1Day",
+                "start": (end_date - pd.Timedelta(days=10)).strftime("%Y-%m-%d"),
+                "end": end_date.strftime("%Y-%m-%d"),
+                "limit": 1,
+                "sort": "desc",
+                "feed": request.args.get("feed", "iex"),
+            },
+            timeout=10,
+            ticker=ticker,
+        )
+        if bar_error:
+            error_response, _ = bar_error
+            errors["session"] = (error_response.get_json(silent=True) or {}).get(
+                "error", "The latest session bar could not be loaded."
+            )
+        else:
+            bars = bar_data.get("bars") or []
+            raw_bar = bars[0] if bars else {}
+            latest_bar = {
+                "volume": raw_bar.get("v"),
+                "tradeCount": raw_bar.get("n"),
+                "vwap": raw_bar.get("vw"),
+                "timestamp": raw_bar.get("t"),
+            }
+    else:
+        errors["alpaca"] = "Set ALPACA_API_KEY and ALPACA_SECRET_KEY to load quotes and session activity."
+
+    polygon_key = os.getenv("POLYGON_API_KEY", "").strip()
+    if polygon_key:
+        try:
+            response = requests.get(
+                f"https://api.polygon.io/v3/reference/tickers/{ticker}",
+                params={"apiKey": polygon_key},
+                timeout=10,
+            )
+            if response.ok:
+                details = response.json().get("results") or {}
+                company = {
+                    "name": details.get("name"),
+                    "marketCap": details.get("market_cap"),
+                    "sharesOutstanding": (
+                        details.get("weighted_shares_outstanding")
+                        or details.get("share_class_shares_outstanding")
+                    ),
+                    "primaryExchange": details.get("primary_exchange"),
+                    "type": details.get("type"),
+                }
+            else:
+                errors["fundamentals"] = (
+                    f"Polygon returned HTTP {response.status_code} for company details."
+                )
+        except (requests.RequestException, ValueError) as error:
+            errors["fundamentals"] = f"Company details could not be loaded: {error}"
+    else:
+        errors["fundamentals"] = "Set POLYGON_API_KEY to load market capitalization and shares outstanding."
+
+    return jsonify({
+        "ticker": ticker,
+        "available": bool(quote or latest_bar or company),
+        "company": company,
+        "quote": quote,
+        "session": latest_bar,
+        "errors": errors,
+    })
+
+
 @app.route("/alpaca/crypto/<path:symbol>/<startDate>/<endDate>", methods=["GET"])
 @require_alpaca
 def alpaca_crypto_history(symbol, startDate, endDate):
@@ -1128,6 +1273,7 @@ def probability_revisit_statistics(prices, target, horizon=120, tolerance=0.01):
 
 
 @app.route("/alpaca/options/<underlying>", methods=["GET"])
+@app.route("/getOptions/<underlying>", methods=["GET"])
 @require_alpaca
 def alpaca_options_endpoint(underlying):
     underlying = underlying.upper().strip()
